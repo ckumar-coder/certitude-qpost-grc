@@ -348,6 +348,329 @@ function AcceptedRiskReport({ onBack }) {
     );
 }
 
+// ── Management Pack print builder ────────────────────────────────────────────
+
+function buildManagementPackHtml({ data, branding, generatedBy }) {
+    const primary   = branding?.branding_primary_color || '#1B3A6B';
+    const logoUrl   = branding?.branding_logo_url || '';
+    const company   = branding?.name || 'Company';
+    const today     = fmtDateLong(new Date().toISOString());
+
+    const {
+        top_risks = [], kri_summary = {}, issues_summary = {},
+        compliance_summary = {}, risk_heatmap = [],
+        risk_distribution_by_dept = [], appetite_breaches = [],
+        tolerance_breaches = [],
+    } = data;
+
+    const totalRisks   = top_risks.length;
+    const openIssues   = issues_summary.open_count || 0;
+    const compliancePct = (() => {
+        const total = compliance_summary.overall?.total || 0;
+        const comp  = compliance_summary.overall?.Compliant || 0;
+        return total ? Math.round((comp / total) * 100) : null;
+    })();
+    const appetiteCount = (appetite_breaches?.length || 0) + (tolerance_breaches?.length || 0);
+
+    const bandColor = (score) => {
+        const n = parseInt(score, 10);
+        if (n >= 15) return '#7f1d1d';
+        if (n >= 10) return '#c2410c';
+        if (n >= 5)  return '#b45309';
+        return '#166534';
+    };
+    const bandBg = (score) => {
+        const n = parseInt(score, 10);
+        if (n >= 15) return '#fee2e2';
+        if (n >= 10) return '#ffedd5';
+        if (n >= 5)  return '#fef9c3';
+        return '#dcfce7';
+    };
+    const cellBg = (score) => {
+        if (score >= 15) return '#7f1d1d';
+        if (score >= 10) return '#c2410c';
+        if (score >= 5)  return '#b45309';
+        return '#166534';
+    };
+
+    // Build 5×5 heatmap grid (impact 5→1 rows, likelihood 1→5 cols)
+    const heatmapRows = [];
+    for (let impact = 5; impact >= 1; impact--) {
+        const cells = [];
+        for (let likelihood = 1; likelihood <= 5; likelihood++) {
+            const cell = risk_heatmap.find(c => c.likelihood === likelihood && c.impact === impact) || { count: 0, score: likelihood * impact };
+            cells.push(cell);
+        }
+        heatmapRows.push({ impact, cells });
+    }
+
+    const heatmapHtml = `
+    <table style="border-collapse:collapse;width:100%;table-layout:fixed">
+        <thead>
+            <tr>
+                <th style="padding:6px;font-size:10px;color:#64748b;text-align:center;width:80px">Impact ↓ / Likelihood →</th>
+                ${[1,2,3,4,5].map(l => `<th style="padding:6px;text-align:center;font-size:11px;font-weight:600;color:#475569">${l}</th>`).join('')}
+            </tr>
+        </thead>
+        <tbody>
+            ${heatmapRows.map(row => `
+            <tr>
+                <td style="padding:6px;text-align:center;font-size:11px;font-weight:600;color:#475569">${row.impact}</td>
+                ${row.cells.map(cell => `
+                <td style="padding:10px 4px;text-align:center;background:${cellBg(cell.score)};color:#fff;font-weight:700;font-size:14px;border:2px solid #fff;border-radius:4px">
+                    ${cell.count > 0 ? cell.count : ''}
+                </td>`).join('')}
+            </tr>`).join('')}
+        </tbody>
+    </table>`;
+
+    const topRisksHtml = top_risks.slice(0, 10).map((r, i) => `
+    <tr style="page-break-inside:avoid">
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;font-weight:700;color:${primary};font-size:11px;white-space:nowrap">${r.risk_uid || `R-${String(i+1).padStart(3,'0')}`}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;font-size:12px">${r.risk_detail || '—'}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#475569">${r.department || '—'}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#475569">${r.risk_owner || '—'}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:center">
+            <span style="display:inline-block;padding:2px 8px;border-radius:4px;background:${bandBg(r.residual_score)};color:${bandColor(r.residual_score)};font-weight:700;font-size:11px">${r.residual_score || '—'}</span>
+        </td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:center;font-size:14px">${r.directional_trend === 'Increasing' ? '↑' : r.directional_trend === 'Decreasing' ? '↓' : '→'}</td>
+    </tr>`).join('');
+
+    const deptHtml = risk_distribution_by_dept.slice(0, 12).map(d => `
+    <tr>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;font-size:12px;font-weight:600">${d.department}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:center;font-size:12px">${d.inherent.extreme || 0}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:center;font-size:12px">${d.inherent.high || 0}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:center;font-size:12px">${d.inherent.moderate || 0}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:center;font-size:12px">${d.residual.extreme || 0}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:center;font-size:12px">${d.residual.high || 0}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:center;font-size:12px">${d.residual.moderate || 0}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700;font-size:12px">${d.residual.total || 0}</td>
+    </tr>`).join('');
+
+    const kriRedHtml = (kri_summary.red_items || []).map(k => `
+    <tr>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;font-weight:700;color:#C0152A;font-size:11px">${k.kri_uid}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;font-size:12px">${k.name}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:center;font-size:12px">${k.current_value ?? '—'}</td>
+    </tr>`).join('');
+
+    const header = (title) => `
+    <div style="display:flex;align-items:center;gap:12px;margin:32px 0 14px">
+        <div style="width:4px;height:22px;background:${primary};border-radius:2px;flex-shrink:0"></div>
+        <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:${primary}">${title}</div>
+        <div style="flex:1;height:1px;background:#e2e8f0"></div>
+    </div>`;
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Risk Management Pack — ${company} — ${today}</title>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'Segoe UI',Arial,sans-serif; color:#1e293b; background:#fff; padding:48px 56px; }
+@media print {
+    body { padding:20px 28px; }
+    @page { margin:16mm 14mm; size:A4 portrait; }
+    .no-break { page-break-inside:avoid; }
+    .page-break { page-break-before:always; }
+}
+table { width:100%; border-collapse:collapse; }
+thead tr { background:${primary}; color:#fff; }
+thead th { padding:9px 8px; text-align:left; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; }
+tbody tr:nth-child(even) { background:#f8fafc; }
+.footer { margin-top:32px; padding-top:14px; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; font-size:10px; color:#94a3b8; }
+</style>
+</head>
+<body>
+
+<!-- ── Cover / Letterhead ───────────────────────────────────────────────── -->
+<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid ${primary};padding-bottom:20px;margin-bottom:28px">
+    <div>
+        ${logoUrl ? `<img src="${logoUrl}" style="max-height:56px;max-width:200px;object-fit:contain" alt="${company}"/>` : `<div style="font-size:22px;font-weight:800;color:${primary}">${company}</div>`}
+    </div>
+    <div style="text-align:right">
+        <div style="font-size:20px;font-weight:800;color:${primary}">Risk Management Pack</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px">Prepared by: ${generatedBy}</div>
+        <div style="font-size:12px;color:#64748b;margin-top:2px">Generated: ${today}</div>
+    </div>
+</div>
+
+<!-- ── Executive Summary ─────────────────────────────────────────────────── -->
+${header('Executive Summary')}
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:8px" class="no-break">
+    <div style="background:#f8fafc;border-radius:8px;padding:14px 16px;border-top:3px solid ${primary}">
+        <div style="font-size:26px;font-weight:800;color:${primary}">${totalRisks}</div>
+        <div style="font-size:10px;color:#64748b;margin-top:3px;text-transform:uppercase;letter-spacing:0.05em">Risks Tracked</div>
+    </div>
+    <div style="background:#f8fafc;border-radius:8px;padding:14px 16px;border-top:3px solid ${(kri_summary.red || 0) > 0 ? '#C0152A' : '#127A47'}">
+        <div style="font-size:26px;font-weight:800;color:${(kri_summary.red || 0) > 0 ? '#C0152A' : '#127A47'}">${kri_summary.red || 0}</div>
+        <div style="font-size:10px;color:#64748b;margin-top:3px;text-transform:uppercase;letter-spacing:0.05em">Red KRIs</div>
+    </div>
+    <div style="background:#f8fafc;border-radius:8px;padding:14px 16px;border-top:3px solid ${openIssues > 0 ? '#D9500A' : '#127A47'}">
+        <div style="font-size:26px;font-weight:800;color:${openIssues > 0 ? '#D9500A' : '#127A47'}">${openIssues}</div>
+        <div style="font-size:10px;color:#64748b;margin-top:3px;text-transform:uppercase;letter-spacing:0.05em">Open Issues</div>
+    </div>
+    <div style="background:#f8fafc;border-radius:8px;padding:14px 16px;border-top:3px solid ${compliancePct === null ? '#64748b' : compliancePct >= 80 ? '#127A47' : compliancePct >= 60 ? '#C07D0A' : '#C0152A'}">
+        <div style="font-size:26px;font-weight:800;color:${compliancePct === null ? '#64748b' : compliancePct >= 80 ? '#127A47' : '#C0152A'}">${compliancePct !== null ? compliancePct + '%' : '—'}</div>
+        <div style="font-size:10px;color:#64748b;margin-top:3px;text-transform:uppercase;letter-spacing:0.05em">Compliance Rate</div>
+    </div>
+    <div style="background:#f8fafc;border-radius:8px;padding:14px 16px;border-top:3px solid ${appetiteCount > 0 ? '#C0152A' : '#127A47'}">
+        <div style="font-size:26px;font-weight:800;color:${appetiteCount > 0 ? '#C0152A' : '#127A47'}">${appetiteCount}</div>
+        <div style="font-size:10px;color:#64748b;margin-top:3px;text-transform:uppercase;letter-spacing:0.05em">Appetite Breaches</div>
+    </div>
+</div>
+
+<!-- ── Risk Heatmap ──────────────────────────────────────────────────────── -->
+${header('Risk Heatmap (Residual)')}
+<div class="no-break" style="max-width:480px">
+    ${heatmapHtml}
+    <div style="display:flex;gap:16px;margin-top:10px;font-size:10px;color:#64748b">
+        <span><span style="display:inline-block;width:12px;height:12px;background:#166534;border-radius:2px;vertical-align:middle;margin-right:4px"></span>Low (1–4)</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:#b45309;border-radius:2px;vertical-align:middle;margin-right:4px"></span>Medium (5–9)</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:#c2410c;border-radius:2px;vertical-align:middle;margin-right:4px"></span>High (10–14)</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:#7f1d1d;border-radius:2px;vertical-align:middle;margin-right:4px"></span>Extreme (15–25)</span>
+    </div>
+</div>
+
+<!-- ── Top Risks ─────────────────────────────────────────────────────────── -->
+${header('Top 10 Risks by Residual Score')}
+<table class="no-break">
+    <thead><tr>
+        <th style="width:80px">Risk ID</th>
+        <th>Risk Description</th>
+        <th style="width:120px">Department</th>
+        <th style="width:110px">Owner</th>
+        <th style="width:80px;text-align:center">Residual</th>
+        <th style="width:50px;text-align:center">Trend</th>
+    </tr></thead>
+    <tbody>
+        ${topRisksHtml || `<tr><td colspan="6" style="padding:20px;text-align:center;color:#94a3b8">No risks recorded.</td></tr>`}
+    </tbody>
+</table>
+
+<!-- ── Department Risk Distribution ─────────────────────────────────────── -->
+${header('Risk Distribution by Department')}
+<table class="no-break">
+    <thead><tr>
+        <th>Department</th>
+        <th style="text-align:center" colspan="3">Inherent</th>
+        <th style="text-align:center" colspan="3">Residual</th>
+        <th style="text-align:center">Total</th>
+    </tr>
+    <tr style="background:${primary}cc">
+        <th></th>
+        <th style="text-align:center;font-size:9px">Extreme</th>
+        <th style="text-align:center;font-size:9px">High</th>
+        <th style="text-align:center;font-size:9px">Medium</th>
+        <th style="text-align:center;font-size:9px">Extreme</th>
+        <th style="text-align:center;font-size:9px">High</th>
+        <th style="text-align:center;font-size:9px">Medium</th>
+        <th style="text-align:center;font-size:9px">Risks</th>
+    </tr></thead>
+    <tbody>
+        ${deptHtml || `<tr><td colspan="8" style="padding:20px;text-align:center;color:#94a3b8">No department data.</td></tr>`}
+    </tbody>
+</table>
+
+<!-- ── KRI Status ────────────────────────────────────────────────────────── -->
+${header('Key Risk Indicators (KRI) Status')}
+<div style="display:flex;gap:16px;margin-bottom:16px" class="no-break">
+    <div style="flex:1;background:#dcfce7;border-radius:8px;padding:14px 16px;text-align:center">
+        <div style="font-size:28px;font-weight:800;color:#127A47">${kri_summary.green || 0}</div>
+        <div style="font-size:10px;color:#166534;text-transform:uppercase;letter-spacing:0.05em;margin-top:2px">🟢 Green</div>
+    </div>
+    <div style="flex:1;background:#fef9c3;border-radius:8px;padding:14px 16px;text-align:center">
+        <div style="font-size:28px;font-weight:800;color:#b45309">${kri_summary.amber || 0}</div>
+        <div style="font-size:10px;color:#92400e;text-transform:uppercase;letter-spacing:0.05em;margin-top:2px">🟡 Amber</div>
+    </div>
+    <div style="flex:1;background:#fee2e2;border-radius:8px;padding:14px 16px;text-align:center">
+        <div style="font-size:28px;font-weight:800;color:#C0152A">${kri_summary.red || 0}</div>
+        <div style="font-size:10px;color:#7f1d1d;text-transform:uppercase;letter-spacing:0.05em;margin-top:2px">🔴 Red</div>
+    </div>
+    <div style="flex:1;background:#f1f5f9;border-radius:8px;padding:14px 16px;text-align:center">
+        <div style="font-size:28px;font-weight:800;color:#64748b">${kri_summary.none || 0}</div>
+        <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-top:2px">⚪ No Data</div>
+    </div>
+</div>
+${(kri_summary.red_items || []).length > 0 ? `
+<table class="no-break">
+    <thead><tr><th style="width:90px">KRI ID</th><th>Indicator Name</th><th style="width:100px;text-align:center">Current Value</th></tr></thead>
+    <tbody>${kriRedHtml}</tbody>
+</table>` : `<div style="padding:14px;background:#f8fafc;border-radius:6px;font-size:12px;color:#64748b">✅ No KRIs currently in breach.</div>`}
+
+<!-- ── Issues Summary ────────────────────────────────────────────────────── -->
+${header('Issues Summary')}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px" class="no-break">
+    ${['Critical','High','Medium','Low'].map(p => {
+        const count = (issues_summary.by_priority || {})[p] || 0;
+        const colors = { Critical:'#C0152A', High:'#c2410c', Medium:'#b45309', Low:'#127A47' };
+        return `<div style="background:#f8fafc;border-radius:8px;padding:14px 16px;border-left:4px solid ${colors[p]}">
+            <div style="font-size:24px;font-weight:800;color:${colors[p]}">${count}</div>
+            <div style="font-size:10px;color:#64748b;margin-top:3px;text-transform:uppercase">${p}</div>
+        </div>`;
+    }).join('')}
+</div>
+
+<!-- ── Footer ────────────────────────────────────────────────────────────── -->
+<div class="footer">
+    <span>CONFIDENTIAL — ${company}</span>
+    <span>Risk Management Pack</span>
+    <span>Generated: ${today}</span>
+</div>
+
+<script>window.onload = () => window.print();</script>
+</body>
+</html>`;
+}
+
+// ── Management Pack component ─────────────────────────────────────────────────
+
+function ManagementPack({ onBack }) {
+    const { api, session } = useAuth();
+    const [loading, setLoading] = useState(false);
+    const [error, setError]     = useState('');
+
+    const activeCompany = session?.companies?.find(c => c.id === session.activeCompanyId);
+    const generatedBy   = session?.user?.full_name || session?.user?.email || 'Administrator';
+
+    async function handleGenerate() {
+        setLoading(true);
+        setError('');
+        try {
+            const data     = await api.get('/dashboard/management-summary');
+            const branding = await api.get('/companies/current/branding').catch(() => activeCompany);
+            const html     = buildManagementPackHtml({ data, branding: branding || activeCompany, generatedBy });
+            const win      = window.open('', '_blank');
+            win.document.write(html);
+            win.document.close();
+        } catch (e) {
+            setError(e.message || 'Failed to generate Management Pack');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    return (
+        <div>
+            <div className="card" style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                    <button type="button" className="btn btn-sm btn-secondary" onClick={onBack}>← Back</button>
+                    <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>📊 Risk Management Pack</h2>
+                </div>
+                <p style={{ margin: '0 0 20px', fontSize: 14, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
+                    Generates a print-ready Management Pack with the current dashboard data — Risk Heatmap, Top Risks, KRI Status, Issues Summary, and Department Risk Distribution — formatted on company letterhead.
+                </p>
+                {error && <div className="alert alert-danger" style={{ marginBottom: 16 }}>{error}</div>}
+                <button className="btn btn-primary" onClick={handleGenerate} disabled={loading}>
+                    {loading ? '⏳ Generating…' : '🖨 Generate & Print Management Pack'}
+                </button>
+            </div>
+        </div>
+    );
+}
+
 // ── Template card ─────────────────────────────────────────────────────────────
 
 function TemplateCard({ icon, title, description, badge, onClick }) {
@@ -398,6 +721,20 @@ export default function FormsTemplates() {
         );
     }
 
+    if (active === 'management-pack') {
+        return (
+            <div>
+                <div className="topbar">
+                    <div>
+                        <h1 className="page-title">{t('forms_title')}</h1>
+                        <p className="page-subtitle">{t('forms_subtitle')}</p>
+                    </div>
+                </div>
+                <ManagementPack onBack={() => setActive(null)} />
+            </div>
+        );
+    }
+
     return (
         <div>
             <div className="topbar">
@@ -416,6 +753,13 @@ export default function FormsTemplates() {
                     onClick={() => setActive('accepted-risks')}
                 />
                 <TemplateCard
+                    icon="📊"
+                    title="Management Pack"
+                    description="One-click printable Management Pack — Risk Heatmap, Top 10 Risks, KRI Status, Issues, and Compliance Summary on company letterhead."
+                    badge="Demo"
+                    onClick={() => setActive('management-pack')}
+                />
+                <TemplateCard
                     icon="⚠️"
                     title={t('forms_risk_exception')}
                     description={t('forms_risk_exception_desc')}
@@ -423,7 +767,7 @@ export default function FormsTemplates() {
                     onClick={null}
                 />
                 <TemplateCard
-                    icon="📊"
+                    icon="📝"
                     title={t('forms_appetite_stmt')}
                     description={t('forms_appetite_desc')}
                     badge={t('forms_coming_soon')}

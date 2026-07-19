@@ -1,5 +1,18 @@
 [
   {
+    "version": "2.42.0",
+    "date": "19 Jul 2026",
+    "type": "New Feature",
+    "user_bullets": [
+      "New Management Pack report in Forms & Templates — one click generates a print-ready PDF with Risk Heatmap, Top 10 Risks, KRI Status, Department Risk Distribution, Issues Summary, and Compliance Summary on company letterhead."
+    ],
+    "bullets": [
+      "FormsTemplates.jsx: added buildManagementPackHtml() function and ManagementPack component; fetches /dashboard/management-summary and /companies/current/branding, renders full management report HTML and triggers window.print().",
+      "New TemplateCard added to the template grid for Management Pack (Demo badge).",
+      "All data shapes validated against server.js management-summary endpoint (heatmap, top_risks, kri_summary, issues_summary.by_priority, risk_distribution_by_dept, compliance_summary.overall)."
+    ]
+  },
+  {
     "version": "2.41.1",
     "date": "19 Jul 2026",
     "type": "Bug Fix",
