@@ -21,9 +21,9 @@ export default function About() {
 
             <p>
                 Qatar Post GRC Workstation is a governance, risk, and compliance management platform
-                built for organizations that want a structured, audit-ready approach to GRC. It brings
-                together risk registers, control libraries, policy repositories, KRI tracking, and
-                issues management in a single platform.
+                built for Qatar Post's structured, audit-ready approach to GRC. It brings together
+                risk registers, control libraries, policy repositories, KRI tracking, and issues
+                management in a single platform, deployed in a dedicated environment for Qatar Post.
             </p>
 
             <h3>Built by Certitude Advisory</h3>
@@ -41,8 +41,8 @@ export default function About() {
 
             <h3>Technology</h3>
             <p>
-                Hosted securely on Google Cloud infrastructure. All data is encrypted in transit
-                and at rest.
+                Hosted on Qatar Post's own infrastructure and maintained by Qatar Post IT. All data
+                remains within Qatar Post's environment and is encrypted in transit and at rest.
             </p>
 
             <hr style={{ margin: '24px 0', borderColor: 'var(--color-border)' }} />
