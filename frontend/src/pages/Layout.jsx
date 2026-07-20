@@ -279,11 +279,8 @@ export default function Layout({ page, onNavigate, children, groupView }) {
                             )}
                         </div>
                     ) : (() => {
-                        const isOrgRolesException = el.item.id === 'org-roles' &&
-                            (role === 'CRO' || role === 'Consultant CRO' || role === 'Super Admin');
                         const isGreyedOut = demoMode === 'risk-only' &&
-                            (el.item.group === 'Governance' || el.item.group === 'Compliance') &&
-                            !isOrgRolesException;
+                            (el.item.group === 'Governance' || el.item.group === 'Compliance');
                         return (
                             <button
                                 key={el.item.id}
