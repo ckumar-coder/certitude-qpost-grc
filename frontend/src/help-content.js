@@ -339,35 +339,6 @@ export const HELP_CONTENT = {
         ],
     },
 
-    'maturity-assessment': {
-        title: 'Maturity Assessment',
-        items: [
-            {
-                q: 'What is the Maturity Assessment?',
-                a: 'The Maturity Assessment is an independent diagnostic tool that scores your GRC program across key domains on a 1–5 maturity scale. It helps identify where your program is strong and where investment is most needed.',
-            },
-            {
-                q: 'What do the maturity levels mean?',
-                a: 'Level 1 (Initial) — ad hoc, undocumented. Level 2 (Developing) — some processes exist but are inconsistent. Level 3 (Defined) — documented and standardized. Level 4 (Managed) — measured and monitored. Level 5 (Optimizing) — continuously improved.',
-            },
-            {
-                q: 'How are domains and questions set up?',
-                a: 'An Admin configures the assessment domains (e.g., Risk Management, Policy Governance) and the Likert-scale questions within each domain. Domain weights must total 100% for the overall score to be meaningful.',
-            },
-            {
-                q: 'How is the overall maturity score calculated?',
-                a: 'Each domain score is the average of its question responses (1–5). The overall score is a weighted average of all domain scores, using the weights set by the Admin. Standard rounding applies.',
-            },
-            {
-                q: 'Can I compare assessments over time?',
-                a: 'Yes. The results view overlays the current assessment against the previous one on a radar chart, and shows delta scores per domain so you can track improvement or regression.',
-            },
-            {
-                q: 'Who can run an assessment?',
-                a: 'Admins and CROs can start and complete assessments. Admins also have access to the Setup tab to configure domains and questions.',
-            },
-        ],
-    },
 };
 
 export function getHelp(pageId) {

@@ -172,32 +172,15 @@ export default function Layout({ page, onNavigate, children, groupView }) {
         (role === 'Admin' || role === 'Super Admin' || item.roles.includes(role))
     );
 
-    // Build a list of { type: 'heading'|'item'|'maturity', ... } for rendering.
-    const showMaturity = role === 'Super Admin' || role === 'Admin' || role === 'CRO' || role === 'Consultant CRO';
-    const maturityDisabled = role === 'Admin' || role === 'Super Admin';
+    // Build a list of { type: 'heading'|'item', ... } for rendering.
     const navElements = [];
     const seenGroups = new Set();
-    let maturityInserted = false;
     for (const item of visibleItems) {
         if (item.group && !seenGroups.has(item.group)) {
-            // If maturity hasn't been placed yet (e.g. CRO with no ungrouped items),
-            // insert it before the first section heading.
-            if (showMaturity && !maturityInserted) {
-                navElements.push({ type: 'maturity' });
-                maturityInserted = true;
-            }
             navElements.push({ type: 'heading', label: item.group });
             seenGroups.add(item.group);
         }
         navElements.push({ type: 'item', item });
-        // Insert maturity right after My Tasks (the natural anchor for Admin/Manager).
-        if (item.id === 'my-tasks' && showMaturity) {
-            navElements.push({ type: 'maturity' });
-            maturityInserted = true;
-        }
-    }
-    if (showMaturity && !maturityInserted) {
-        navElements.push({ type: 'maturity' });
     }
 
     return (
@@ -256,95 +239,16 @@ export default function Layout({ page, onNavigate, children, groupView }) {
 
                 <div className="sidebar-nav">
                 {groupView ? (
-                    /* In group view, show Group Dashboard + Maturity Assessment */
-                    <>
-                        <button
-                            className={`nav-link ${page === 'consolidated-dashboard' ? 'active' : ''}`}
-                            style={{ textAlign: ar ? 'right' : 'left' }}
-                            onClick={() => onNavigate('consolidated-dashboard')}
-                        >
-                            🌐 {ar ? 'لوحة المجموعة' : 'Group Dashboard'}
-                        </button>
-                        {showMaturity && (
-                            <div key="maturity-nav-group">
-                                <div style={{ margin: '4px 0', borderTop: '1px solid var(--color-border)' }} />
-                                <button
-                                    onClick={maturityDisabled ? undefined : () => onNavigate('maturity-assessment')}
-                                    disabled={maturityDisabled}
-                                    style={{
-                                        display: 'block',
-                                        width: '100%',
-                                        textAlign: 'left',
-                                        padding: '8px 12px',
-                                        border: '1px solid transparent',
-                                        borderRadius: 6,
-                                        background: 'transparent',
-                                        color: maturityDisabled ? 'var(--color-text-muted)' : page === 'maturity-assessment' ? '#085041' : '#0F6E56',
-                                        fontSize: 13,
-                                        fontWeight: 600,
-                                        cursor: maturityDisabled ? 'not-allowed' : 'pointer',
-                                        opacity: maturityDisabled ? 0.45 : 1,
-                                        transition: 'background 0.15s, border-color 0.15s',
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        if (!maturityDisabled && page !== 'maturity-assessment') {
-                                            e.currentTarget.style.background = '#E1F5EE';
-                                            e.currentTarget.style.borderColor = '#9FE1CB';
-                                        }
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        if (!maturityDisabled && page !== 'maturity-assessment') {
-                                            e.currentTarget.style.background = 'transparent';
-                                            e.currentTarget.style.borderColor = 'transparent';
-                                        }
-                                    }}
-                                >
-                                    📊 {ar ? 'تقييم النضج' : 'Maturity Assessment'}
-                                </button>
-                                <div style={{ margin: '4px 0', borderTop: '1px solid var(--color-border)' }} />
-                            </div>
-                        )}
-                    </>
+                    /* In group view, show Group Dashboard */
+                    <button
+                        className={`nav-link ${page === 'consolidated-dashboard' ? 'active' : ''}`}
+                        style={{ textAlign: ar ? 'right' : 'left' }}
+                        onClick={() => onNavigate('consolidated-dashboard')}
+                    >
+                        🌐 {ar ? 'لوحة المجموعة' : 'Group Dashboard'}
+                    </button>
                 ) : navElements.map((el, i) =>
-                    el.type === 'maturity' ? (
-                        <div key="maturity-nav">
-                            <div style={{ margin: '4px 0', borderTop: '1px solid var(--color-border)' }} />
-                            <button
-                                onClick={maturityDisabled ? undefined : () => onNavigate('maturity-assessment')}
-                                disabled={maturityDisabled}
-                                style={{
-                                    display: 'block',
-                                    width: '100%',
-                                    textAlign: 'left',
-                                    padding: '8px 12px',
-                                    border: '1px solid transparent',
-                                    borderRadius: 6,
-                                    background: 'transparent',
-                                    color: maturityDisabled ? 'var(--color-text-muted)' : page === 'maturity-assessment' ? '#085041' : '#0F6E56',
-                                    fontSize: 13,
-                                    fontWeight: 600,
-                                    cursor: maturityDisabled ? 'not-allowed' : 'pointer',
-                                    opacity: maturityDisabled ? 0.45 : 1,
-                                    transition: 'background 0.15s, border-color 0.15s',
-                                }}
-                                onMouseEnter={(e) => {
-                                    if (!maturityDisabled && page !== 'maturity-assessment') {
-                                        e.currentTarget.style.background = '#E1F5EE';
-                                        e.currentTarget.style.borderColor = '#9FE1CB';
-                                    }
-                                }}
-                                onMouseLeave={(e) => {
-                                    if (!maturityDisabled && page !== 'maturity-assessment') {
-                                        e.currentTarget.style.background = 'transparent';
-                                        e.currentTarget.style.borderColor = 'transparent';
-                                    }
-                                }}
-                            >
-                                📊 {ar ? 'تقييم النضج' : 'Maturity Assessment'}
-                            </button>
-                            <div style={{ margin: '4px 0', borderTop: '1px solid var(--color-border)' }} />
-                        </div>
-                    ) : el.type === 'heading' ? (
+                    el.type === 'heading' ? (
                         <div
                             key={`heading-${el.label}`}
                             style={{

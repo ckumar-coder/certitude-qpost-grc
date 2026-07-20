@@ -37,7 +37,6 @@ const NAV_ITEMS = [
     { id: 'audit',               roles: CRO_ROLES },
     { id: 'storage-health',      roles: ['Admin'] },
     { id: 'companies',           roles: ['Admin'] },
-    { id: 'maturity-assessment', roles: ['Admin', 'CRO', 'Consultant CRO'] },
 ];
 
 // ─── Mirrors the routing logic in App.jsx ────────────────────────────────────
@@ -83,8 +82,6 @@ function resolveRoute(page, role) {
         return 'ScoringMethodology';
     if (page === 'calendar' && (role === 'Admin' || role === 'Risk Manager' || isCRO))
         return 'ComplianceCalendar';
-    if (page === 'maturity-assessment' && (role === 'Admin' || isCRO))
-        return 'MaturityAssessment';
     if (page === 'email-settings' && role === 'Admin')
         return 'EmailSettings';
     if (page === 'risks' && (role === 'Admin' || role === 'Risk Manager' || isCRO))

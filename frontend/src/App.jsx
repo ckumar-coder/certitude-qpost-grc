@@ -36,7 +36,6 @@ import ConsolidatedDashboard from './pages/ConsolidatedDashboard';
 import SetupWizard from './pages/SetupWizard';
 import ConsultantDashboard from './pages/ConsultantDashboard';
 import CriticalRisksLog from './pages/CriticalRisksLog';
-import MaturityAssessment from './pages/MaturityAssessment';
 import AccessMatrix from './pages/AccessMatrix';
 import IncidentLog from './pages/IncidentLog';
 import RiskAppetite from './pages/RiskAppetite';
@@ -106,16 +105,6 @@ export default function App() {
         );
     }
 
-    // Maturity Assessment is platform-level — accessible from group view too
-    const _groupRole = session.companies.find((c) => c.id === session.activeCompanyId)?.role;
-    if (page === 'maturity-assessment' && (_groupRole === 'Admin' || _groupRole === 'CRO' || _groupRole === 'Consultant CRO')) {
-        return (
-            <Layout page="maturity-assessment" onNavigate={setPage} groupView={session.isGroupView}>
-                <MaturityAssessment />
-            </Layout>
-        );
-    }
-
     // Group view: show consolidated dashboard regardless of page
     if (session.isGroupView) {
         return (
@@ -165,8 +154,6 @@ export default function App() {
         content = <AuditLog />;
     } else if (page === 'data-tools' && (isSuperAdmin || role === 'Admin' || isOp)) {
         content = <DataTools />;
-    } else if (page === 'maturity-assessment' && (isSuperAdmin || role === 'Admin' || isCRO)) {
-        content = <MaturityAssessment />;
 
     // ── Always accessible ─────────────────────────────────────────────────────
     } else if (page === 'about') {

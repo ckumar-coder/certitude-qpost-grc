@@ -443,10 +443,6 @@ const T = {
     critical_risks_title:    { en: 'Critical Risks Log',           ar: 'سجل المخاطر الحرجة' },
     critical_risks_subtitle: { en: 'Risks rated Critical requiring escalated attention.', ar: 'المخاطر المصنفة حرجة والتي تتطلب اهتماماً مُصعَّداً.' },
 
-    // ── Maturity Assessment ────────────────────────────────────────────────────
-    maturity_title:       { en: 'Maturity Assessment',             ar: 'تقييم النضج' },
-    maturity_subtitle:    { en: 'Assess the GRC maturity level of this organisation.', ar: 'تقييم مستوى نضج GRC لهذه المؤسسة.' },
-
     // ── Glossary ──────────────────────────────────────────────────────────────
     glossary_title:        { en: 'GRC Glossary',                                     ar: 'مسرد GRC' },
     glossary_subtitle:     { en: 'Plain-language definitions for risk management and compliance terms used throughout the application.', ar: 'تعريفات بسيطة للمصطلحات المستخدمة في إدارة المخاطر والامتثال عبر التطبيق.' },
