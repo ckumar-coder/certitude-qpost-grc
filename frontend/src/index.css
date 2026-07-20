@@ -264,6 +264,22 @@ a {
   margin-bottom: 24px;
 }
 
+/* Sub-section "step" card used inside multi-step forms (e.g. New Risk) —
+   gives each numbered step its own rounded, bordered panel instead of one
+   long undivided scroll. */
+.step-section {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 20px 22px;
+  margin-bottom: 20px;
+  background: var(--color-bg, #fafbfc);
+}
+
+.step-section > h3:first-child,
+.step-section > div:first-child > h3 {
+  margin-top: 0;
+}
+
 .grid-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;

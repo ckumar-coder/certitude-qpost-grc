@@ -1900,6 +1900,7 @@ function NewRiskForm({ categories, causeTerms, consequenceTerms, onTermsChanged,
             {showInfoModal === 'likelihood' && <LikelihoodInfoModal defs={likelihoodDefs} onClose={() => setShowInfoModal(null)} />}
             {showInfoModal === 'impact' && <ImpactInfoModal pillars={pillars} onClose={() => setShowInfoModal(null)} />}
 
+            <div className="step-section">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <h3 style={{ margin: 0 }}>{initialRisk ? `Editing Draft — ${initialRisk.risk_uid}` : 'Step 1 — Risk Identification'}</h3>
@@ -2066,6 +2067,9 @@ function NewRiskForm({ categories, causeTerms, consequenceTerms, onTermsChanged,
                     </div>
                 )}
             </div>
+            </div>
+
+            <div className="step-section">
             <h3>Step 2 — Inherent Risk Scoring</h3>
             <div className="form-row">
                 <ScoreSelect label="Likelihood" kind="likelihood" value={form.inherent_likelihood} onChange={(v) => update('inherent_likelihood', v)} onShowInfo={() => setShowInfoModal('likelihood')} />
@@ -2109,7 +2113,9 @@ function NewRiskForm({ categories, causeTerms, consequenceTerms, onTermsChanged,
                     </div>
                 </div>
             )}
+            </div>
 
+            <div className="step-section">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <h3 style={{ margin: 0 }}>Step 3 — Controls</h3>
                 <button
@@ -2332,7 +2338,9 @@ function NewRiskForm({ categories, causeTerms, consequenceTerms, onTermsChanged,
                     </div>
                 )}
             </div>
+            </div>
 
+            <div className="step-section">
             <h3>Step 4 — Residual Risk Scoring</h3>
             <div className="form-row">
                 <ScoreSelect label="Likelihood" kind="likelihood" value={form.residual_likelihood} onChange={(v) => update('residual_likelihood', v)} onShowInfo={() => setShowInfoModal('likelihood')} />
@@ -2345,6 +2353,7 @@ function NewRiskForm({ categories, causeTerms, consequenceTerms, onTermsChanged,
                         </span>
                     </div>
                 </div>
+            </div>
             </div>
 
             {/* Bug 8 — MAP popup */}
@@ -2366,6 +2375,7 @@ function NewRiskForm({ categories, causeTerms, consequenceTerms, onTermsChanged,
                 </div>
             )}
 
+            <div className="step-section">
             <h3 style={mapRequired ? { color: '#dc2626', borderLeft: '4px solid #dc2626', paddingLeft: 10 } : {}}>
                 Step 5 — Mitigation Action Plan (MAP)
                 {mapRequired && <span style={{ fontSize: 12, fontWeight: 400, marginLeft: 10, color: '#dc2626' }}>⚠ Required for Partially Effective / Ineffective controls</span>}
@@ -2430,7 +2440,9 @@ function NewRiskForm({ categories, causeTerms, consequenceTerms, onTermsChanged,
             >
                 + Add mitigation action
             </button>
+            </div>
 
+            <div className="step-section">
             <h3>Step 6 — Review &amp; Framework</h3>
             <div className="form-row">
                 <div className="form-group">
@@ -2447,9 +2459,10 @@ function NewRiskForm({ categories, causeTerms, consequenceTerms, onTermsChanged,
                 </div>
                 <FrameworkRefField value={form.framework_reference} onChange={(v) => update('framework_reference', v)} />
             </div>
+            </div>
 
             {/* ── Step 9 — Save ── */}
-            <div style={{ marginTop: 24, borderTop: '2px solid var(--color-border, #e0e0e0)', paddingTop: 20 }}>
+            <div className="step-section">
                 <h3 style={{ marginTop: 0 }}>Step 7 — Save</h3>
                 <p style={{ color: 'var(--color-text-muted, #666)', fontSize: 13, marginBottom: 12 }}>
                     Review your entries above, then save. The statement quality check runs automatically when you leave the Risk Description field.
