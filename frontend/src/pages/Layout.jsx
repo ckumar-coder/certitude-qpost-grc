@@ -65,10 +65,14 @@ const NAV_ITEMS = [
 
     // ── Governance ──
     { id: 'policies',   label: 'Policy Repository', roles: [...OP_ROLES, 'Viewer', 'Risk Champion'], group: 'Governance' },
-    { id: 'org-roles',  label: 'Org Roles (RACI)',  roles: NON_ADMIN, group: 'Governance' },
+
+    // ── Strategic Intelligence ──
+    { id: 'horizon-scanning',    label: 'Horizon Scanning',     roles: ['CRO', 'Consultant CRO', 'Risk Manager'], group: 'Strategic Intelligence' },
+    { id: 'org-roles',           label: 'Org Roles (RACI)',     roles: NON_ADMIN, group: 'Strategic Intelligence' },
+    { id: 'risk-appetite',       label: 'Risk Appetite',        roles: [...CRO_ROLES, 'Risk Champion', 'Risk Owner', 'Viewer'], group: 'Strategic Intelligence' },
+    { id: 'scoring-methodology', label: 'Scoring Methodology',  roles: [...CRO_ROLES, 'Risk Champion', 'Risk Owner', 'Viewer'], group: 'Strategic Intelligence' },
 
     // ── Risk ──
-    { id: 'horizon-scanning',    label: 'Horizon Scanning',    roles: ['CRO', 'Consultant CRO', 'Risk Manager'], group: 'Strategic Intelligence' },
     { id: 'risks',               label: 'Risk Register',       roles: ['Admin', ...OP_ROLES, 'Risk Champion', 'Viewer'], group: 'Risk' },
     { id: 'critical-risks',      label: 'Critical Risks Log',  roles: NON_ADMIN, group: 'Risk' },
     { id: 'controls',            label: 'Control Library',     roles: [...OP_ROLES, 'Risk Champion', 'Viewer'], group: 'Risk' },
@@ -76,8 +80,6 @@ const NAV_ITEMS = [
     { id: 'kri-register',        label: 'KRI Register',        roles: [...OP_ROLES, 'Risk Champion', 'Viewer'], group: 'Risk' },
     { id: 'issues',              label: 'Issues & Actions',    roles: [...OP_ROLES, 'Risk Champion', 'Viewer'], group: 'Risk' },
     { id: 'incident-log',        label: 'Incident Log',        roles: [...OP_ROLES, 'Risk Champion', 'Viewer'], group: 'Risk' },
-    { id: 'risk-appetite',        label: 'Risk Appetite',       roles: [...CRO_ROLES, 'Risk Champion', 'Risk Owner', 'Viewer'], group: 'Risk' },
-    { id: 'scoring-methodology',  label: 'Scoring Methodology',       roles: [...CRO_ROLES, 'Risk Champion', 'Risk Owner', 'Viewer'], group: 'Risk' },
     { id: 'risk-gov-docs',        label: 'Risk Gov. Documents',       roles: ['Admin', 'Super Admin', 'CRO', 'Consultant CRO', 'Risk Manager'], group: 'Risk' },
     { id: 'forms-templates',      label: 'Forms & Templates',         roles: ['Admin', 'Super Admin', 'CRO', 'Consultant CRO'], group: 'Risk' },
 
