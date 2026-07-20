@@ -17,7 +17,7 @@ const WARNING_BEFORE_MS = 60 * 1000; // show "you're about to be logged out" 60s
 // "Add to Home Screen", or an installed PWA) rather than a regular browser tab.
 // `display-mode: standalone` is the standard check; `navigator.standalone` is
 // the older iOS Safari-specific flag, kept as a fallback.
-function isStandaloneApp() {
+export function isStandaloneApp() {
     return (
         (typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches) ||
         window.navigator.standalone === true

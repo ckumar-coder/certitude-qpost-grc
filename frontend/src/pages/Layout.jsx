@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useAuth } from '../AuthContext';
+import { useAuth, isStandaloneApp } from '../AuthContext';
 import TopBar from '../components/TopBar';
 import HelpPanel from '../components/HelpPanel';
 import WhatsNew, { hasUnseenUpdates, markAsSeen } from '../components/WhatsNew';
@@ -144,7 +144,13 @@ export default function Layout({ page, onNavigate, children, groupView }) {
     // Security: auto-logout if the browser back button is used.
     // Push a sentinel history entry on mount so there's always something to pop.
     // popstate only fires on browser back/forward — never on internal SPA navigation.
+    // Skipped in the standalone Dock/Home Screen window: there's no address
+    // bar or tab strip there for a "back to a stale page" concern to apply,
+    // and pushing an extra history entry would otherwise block window.close()
+    // on logout (Safari only allows a script to self-close a window whose
+    // session history has exactly one entry).
     useEffect(() => {
+        if (isStandaloneApp()) return;
         window.history.pushState({ grcApp: true }, '');
         const handlePop = () => { logout(); };
         window.addEventListener('popstate', handlePop);
