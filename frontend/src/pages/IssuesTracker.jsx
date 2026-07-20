@@ -14,8 +14,6 @@ const SOURCE_TYPES = [
     'Regulatory',
     'Whistleblower-Ethics',
     'Customer Complaint',
-    'BCP Test Finding',
-    'BCP Activation — Lessons Learned',
 ];
 
 const PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];

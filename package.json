@@ -1,6 +1,6 @@
 {
   "name": "grc-workstation",
-  "version": "2.42.0",
+  "version": "2.42.3",
   "description": "GRC Workstation -- v2.25.0 (Certitude Advisory Services)",
   "main": "server.js",
   "scripts": {

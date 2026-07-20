@@ -20,12 +20,6 @@
 #   TEST_API_KEY=<staging-test-api-key> \
 #   node test-suite.js
 #
-#   BASE_URL=<staging-url> \
-#   ADMIN_EMAIL=c.kumar@certitude-advisory.ca \
-#   ADMIN_PASSWORD=<password> \
-#   TEST_API_KEY=<staging-test-api-key> \
-#   node test-bcm.js
-#
 
 set -euo pipefail
 
@@ -147,12 +141,6 @@ echo "    ADMIN_EMAIL=c.kumar@certitude-advisory.ca \\"
 echo "    ADMIN_PASSWORD=<your-admin-password> \\"
 echo "    TEST_API_KEY=<grc-app-staging-test-api-key> \\"
 echo "    node test-suite.js"
-echo ""
-echo "    BASE_URL=${URL} \\"
-echo "    ADMIN_EMAIL=c.kumar@certitude-advisory.ca \\"
-echo "    ADMIN_PASSWORD=<your-admin-password> \\"
-echo "    TEST_API_KEY=<grc-app-staging-test-api-key> \\"
-echo "    node test-bcm.js"
 echo ""
 echo "  If all tests pass, deploy to production with:"
 echo "    ./deploy-certitude.sh"

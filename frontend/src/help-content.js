@@ -160,11 +160,7 @@ export const HELP_CONTENT = {
         items: [
             {
                 q: 'What qualifies as an issue?',
-                a: 'An issue is any identified gap, weakness, or failure in your controls or processes. Sources include control test failures, audit findings, regulatory notices, customer complaints, and BCP test findings.',
-            },
-            {
-                q: 'What are the BCP source types?',
-                a: '"BCP Test Finding" captures weaknesses identified during a planned BCP exercise. "BCP Activation — Lessons Learned" records issues identified during an actual business disruption event. Both feed into your BCM improvement cycle.',
+                a: 'An issue is any identified gap, weakness, or failure in your controls or processes. Sources include control test failures, audit findings, regulatory notices, and customer complaints.',
             },
             {
                 q: 'What happens when an issue is "Risk Accepted"?',
@@ -339,112 +335,6 @@ export const HELP_CONTENT = {
             {
                 q: 'Can I rename or delete a department?',
                 a: 'Yes. Renaming a department updates all linked records automatically. Deleting a department is only permitted if no records are currently assigned to it.',
-            },
-        ],
-    },
-
-    'bcm-dashboard': {
-        title: 'BCM Dashboard',
-        items: [
-            {
-                q: 'What does the BCM Dashboard show?',
-                a: 'The BCM Dashboard gives a consolidated view of your Business Continuity Management program: critical process count, BCP coverage rate, upcoming test schedules, open activation events, and unresolved issues from BCP tests.',
-            },
-            {
-                q: 'What is the BCP coverage rate?',
-                a: 'BCP coverage is the percentage of critical processes that have at least one active, published BCP. A rate below 100% means some critical processes are unprotected — these are flagged for action.',
-            },
-        ],
-    },
-
-    'bcm-processes': {
-        title: 'Critical Processes',
-        items: [
-            {
-                q: 'What is a critical process?',
-                a: 'A critical process is any business activity whose disruption would materially impact your organization\'s operations, obligations, or reputation. Identifying critical processes is the foundation of your BCM program.',
-            },
-            {
-                q: 'What is RTO and RPO?',
-                a: 'Recovery Time Objective (RTO) is the maximum acceptable time to restore a process after disruption. Recovery Point Objective (RPO) is the maximum acceptable data loss measured in time. Both drive your BCP design.',
-            },
-            {
-                q: 'What does the criticality tier mean?',
-                a: 'Tier 1 processes are mission-critical and must be recovered within hours. Tier 2 processes are important but can tolerate a day or more of downtime. Tier 3 processes are non-critical and can be deferred.',
-            },
-        ],
-    },
-
-    'bcm-bcps': {
-        title: 'BCP Library',
-        items: [
-            {
-                q: 'What is the BCP Library?',
-                a: 'The BCP Library stores all your Business Continuity Plans. Each BCP is linked to one or more critical processes and defines the steps, resources, and contacts needed to recover those processes during a disruption.',
-            },
-            {
-                q: 'What BCP statuses are available?',
-                a: 'Draft (being written), Active (approved and ready to invoke), Under Review (due for update), and Retired (superseded). Only Active BCPs count toward your BCP coverage rate on the dashboard.',
-            },
-            {
-                q: 'How do I attach a BCP document?',
-                a: 'Each BCP record has a document upload field. Supported formats include PDF, Word, and Excel. Documents are stored securely in cloud storage and linked to the record permanently.',
-            },
-        ],
-    },
-
-    'bcm-tests': {
-        title: 'Testing Log',
-        items: [
-            {
-                q: 'What types of BCP tests should I log?',
-                a: 'Common test types include tabletop exercises (discussion-based), walkthroughs (step-by-step review), simulations (partial activation), and full tests (actual invocation). Log the type, date, participants, outcome, and any findings.',
-            },
-            {
-                q: 'What happens to findings from a test?',
-                a: 'Findings from BCP tests can be raised directly as Issues in the Issues & Actions module using the "BCP Test Finding" source type. This ensures they are tracked to resolution and feed back into your BCM improvement cycle.',
-            },
-        ],
-    },
-
-    'bcm-scenarios': {
-        title: 'Scenario Library',
-        items: [
-            {
-                q: 'What is a BCM scenario?',
-                a: 'A scenario describes a type of disruption your organization might face — for example, a cyberattack, pandemic, flood, or key person loss. Scenarios are used to scope BCP tests and assess whether your plans cover the right threats.',
-            },
-            {
-                q: 'How do scenarios connect to BCPs and tests?',
-                a: 'Each BCP test is linked to a scenario to record which threat it exercised. Over time this gives you visibility into which scenarios have been tested and which remain untested.',
-            },
-        ],
-    },
-
-    'bcm-dependencies': {
-        title: 'Dependencies & SPOFs',
-        items: [
-            {
-                q: 'What is a Single Point of Failure (SPOF)?',
-                a: 'A SPOF is any resource, system, supplier, or person whose loss would halt a critical process with no available alternative. Identifying SPOFs is essential for designing resilient BCPs.',
-            },
-            {
-                q: 'What dependency types can I record?',
-                a: 'Dependencies can be IT Systems, Third-Party Suppliers, People (key person dependencies), Facilities, or Utilities. Each is rated by criticality and linked to the processes that depend on it.',
-            },
-        ],
-    },
-
-    'bcm-activations': {
-        title: 'Activation Log',
-        items: [
-            {
-                q: 'What is the Activation Log?',
-                a: 'The Activation Log records every instance where a BCP was formally invoked due to an actual disruption event. It captures the trigger, affected processes, response timeline, and lessons learned.',
-            },
-            {
-                q: 'What are "Lessons Learned" and why do they matter?',
-                a: 'Lessons Learned are observations from a real activation that reveal gaps in your plans or response. They should be raised as Issues using the "BCP Activation — Lessons Learned" source type so they are formally tracked and improve future readiness.',
             },
         ],
     },

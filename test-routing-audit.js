@@ -27,13 +27,6 @@ const NAV_ITEMS = [
     { id: 'scoring-methodology', roles: CRO_ROLES },
     { id: 'obligations',         roles: CRO_ROLES },
     { id: 'calendar',            roles: CRO_ROLES },
-    { id: 'bcm-dashboard',       roles: CRO_ROLES },
-    { id: 'bcm-processes',       roles: CRO_ROLES },
-    { id: 'bcm-bcps',            roles: CRO_ROLES },
-    { id: 'bcm-tests',           roles: CRO_ROLES },
-    { id: 'bcm-scenarios',       roles: CRO_ROLES },
-    { id: 'bcm-dependencies',    roles: CRO_ROLES },
-    { id: 'bcm-activations',     roles: CRO_ROLES },
     { id: 'glossary',            roles: ALL_ROLES },
     { id: 'data-tools',          roles: CRO_ROLES },
     { id: 'users',               roles: ['Admin'] },
@@ -70,20 +63,6 @@ function resolveRoute(page, role) {
         return 'KriRegister';
     if (page === 'obligations' && (role === 'Admin' || role === 'Risk Manager' || isCRO))
         return 'ComplianceObligations';
-    if (page === 'bcm-dashboard' && (role === 'Admin' || role === 'Risk Manager' || isCRO))
-        return 'BcmDashboard';
-    if (page === 'bcm-processes' && (role === 'Admin' || role === 'Risk Manager' || isCRO))
-        return 'BcmProcessRegister';
-    if (page === 'bcm-bcps' && (role === 'Admin' || role === 'Risk Manager' || isCRO))
-        return 'BcmBcpLibrary';
-    if (page === 'bcm-tests' && (role === 'Admin' || role === 'Risk Manager' || isCRO))
-        return 'BcmTestingLog';
-    if (page === 'bcm-scenarios' && (role === 'Admin' || role === 'Risk Manager' || isCRO))
-        return 'BcmScenarioLibrary';
-    if (page === 'bcm-dependencies' && (role === 'Admin' || role === 'Risk Manager' || isCRO))
-        return 'BcmDependencyRegister';
-    if (page === 'bcm-activations' && (role === 'Admin' || role === 'Risk Manager' || isCRO))
-        return 'BcmActivationLog';
     if (page === 'issues' && (role === 'Admin' || role === 'Risk Manager' || isCRO))
         return 'IssuesTracker';
     if (page === 'org-roles' && (role === 'Admin' || role === 'Risk Manager' || isCRO))

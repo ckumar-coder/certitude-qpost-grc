@@ -175,7 +175,6 @@ export default function RiskRegister({ fromIncidentId = null, onIncidentLinked =
 
     const [allDepartments, setAllDepartments] = useState([]);
     const [allBus, setAllBus] = useState([]);
-    const [allBcps, setAllBcps] = useState([]);
 
     // Send-back modal (Manager reject / Approver reject)
     const [sendBackModal, setSendBackModal] = useState(null); // { id, endpoint }
@@ -199,13 +198,12 @@ export default function RiskRegister({ fromIncidentId = null, onIncidentLinked =
         try {
             const isCro = role === 'CRO' || role === 'Consultant CRO' || isSuperAdmin;
             const isBuMode = !!activeCompany?.has_business_units;
-            const [riskData, categoryData, controlsData, krisData, deptData, bcpData, croMgrData, buData, riskOwnerData] = await Promise.all([
+            const [riskData, categoryData, controlsData, krisData, deptData, croMgrData, buData, riskOwnerData] = await Promise.all([
                 api.get(`/risks${includeClosed ? '?include_closed=true' : ''}`),
                 api.get('/risk-taxonomy'),
                 api.get('/controls'),
                 api.get('/kris'),
                 api.get('/departments'),
-                api.get('/bcm/bcps').catch(() => []),
                 isCro ? api.get('/departments/without-manager') : Promise.resolve(null),
                 isBuMode ? api.get('/business-units').catch(() => []) : Promise.resolve([]),
                 api.get('/users/risk-owners').catch(() => []),
@@ -216,7 +214,6 @@ export default function RiskRegister({ fromIncidentId = null, onIncidentLinked =
             setAllKris(krisData);
             setAllDepartments(deptData);
             setAllBus(buData);
-            setAllBcps(bcpData);
             setRiskOwnerUsers(Array.isArray(riskOwnerData) ? riskOwnerData : []);
             if (croMgrData) {
                 setEnterpriseMgrExists(croMgrData.enterprise_manager_exists);
@@ -413,7 +410,6 @@ export default function RiskRegister({ fromIncidentId = null, onIncidentLinked =
                     userEmail={session.user.email}
                     allControls={allControls}
                     allKris={allKris}
-                    allBcps={allBcps}
                     riskOwnerUsers={riskOwnerUsers}
                     initialRisk={editingDraft}
                     onCreated={async (created) => {
@@ -1098,7 +1094,7 @@ export function RiskDetail({ risk: r, api, onClose, onReopen, onRefresh, onEditD
         </div>
 
         {/* ── BCP ──────────────────────────────────────────────────────────── */}
-        {(r.bcp_status || r.bcp_link || r.linked_bcps?.length > 0) && (
+        {(r.bcp_status || r.bcp_link) && (
             <div className="card" style={{ marginBottom: 16 }}>
                 <h3 style={{ margin: '0 0 16px' }}>Business Continuity</h3>
                 <div className="form-row">
@@ -1117,20 +1113,6 @@ export function RiskDetail({ risk: r, api, onClose, onReopen, onRefresh, onEditD
                         </div>
                     )}
                 </div>
-                {r.linked_bcps?.length > 0 && (
-                    <div className="form-group">
-                        <label>BCPs Covering This Risk</label>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '6px 0' }}>
-                            {r.linked_bcps.map((b) => (
-                                <div key={b.id} style={{ fontSize: 13 }}>
-                                    <span style={{ fontFamily: 'monospace', marginRight: 6 }}>{b.bcp_uid}</span>
-                                    {b.name}
-                                    <span className="text-muted" style={{ marginLeft: 6, fontSize: 11 }}>({b.status})</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
             </div>
         )}
 
@@ -1671,7 +1653,7 @@ function checkRiskStatement(text) {
     return { cause, effect, impact, missing, allPresent: cause && effect && impact };
 }
 
-function NewRiskForm({ categories, causeTerms, consequenceTerms, onTermsChanged, department, departments, allDepartments, allBus = [], isBuMode = false, role, userEmail, allControls, allKris, allBcps = [], riskOwnerUsers = [], initialRisk = null, onCreated, onError }) {
+function NewRiskForm({ categories, causeTerms, consequenceTerms, onTermsChanged, department, departments, allDepartments, allBus = [], isBuMode = false, role, userEmail, allControls, allKris, riskOwnerUsers = [], initialRisk = null, onCreated, onError }) {
     const { api } = useAuth();
     const [submitting, setSubmitting] = useState(false);
     const [previewId, setPreviewId] = useState('');
@@ -1710,7 +1692,6 @@ function NewRiskForm({ categories, causeTerms, consequenceTerms, onTermsChanged,
         next_review_date: initialRisk.next_review_date ? String(initialRisk.next_review_date).split('T')[0] : '',
         bcp_status: initialRisk.bcp_status || '',
         bcp_link: initialRisk.bcp_link || '',
-        linked_bcp_ids: initialRisk.linked_bcp_ids || [],
         framework_reference: initialRisk.framework_reference || '',
         inherent_likelihood: initialRisk.inherent_likelihood || 3,
         inherent_impact: initialRisk.inherent_impact || 3,
@@ -1732,7 +1713,6 @@ function NewRiskForm({ categories, causeTerms, consequenceTerms, onTermsChanged,
         next_review_date: '',
         bcp_status: '',
         bcp_link: '',
-        linked_bcp_ids: [],
         framework_reference: '',
         inherent_likelihood: 3,
         inherent_impact: 3,
@@ -1784,7 +1764,6 @@ function NewRiskForm({ categories, causeTerms, consequenceTerms, onTermsChanged,
             mitigations: mitigations.filter((m) => m.action.trim()),
             link_control_ids: linkControlIds,
             link_kri_ids: linkKriIds,
-            linked_bcp_ids: form.linked_bcp_ids,
             is_critical: isCritical,
             save_as_draft: saveAsDraft,
         };
@@ -1812,14 +1791,6 @@ function NewRiskForm({ categories, causeTerms, consequenceTerms, onTermsChanged,
     function scheduleAutoSave() {
         if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
         autoSaveTimerRef.current = setTimeout(saveDraft, 15000);
-    }
-
-    function toggleBcp(id) {
-        update('linked_bcp_ids',
-            form.linked_bcp_ids.includes(id)
-                ? form.linked_bcp_ids.filter((x) => x !== id)
-                : [...form.linked_bcp_ids, id]
-        );
     }
 
     function fetchNextIds(dept) {
@@ -2356,20 +2327,6 @@ function NewRiskForm({ categories, causeTerms, consequenceTerms, onTermsChanged,
                                     value={form.bcp_link}
                                     onChange={(e) => update('bcp_link', e.target.value)}
                                 />
-                            </div>
-                        )}
-                        {allBcps.length > 0 && (
-                            <div>
-                                <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 6 }}>Link to BCP Library</div>
-                                <div style={{ maxHeight: 120, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 4, padding: '6px 8px' }}>
-                                    {allBcps.map((b) => (
-                                        <label key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', cursor: 'pointer', fontSize: 13 }}>
-                                            <input type="checkbox" checked={form.linked_bcp_ids.includes(b.id)} onChange={() => toggleBcp(b.id)} />
-                                            <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{b.bcp_uid}</span>
-                                            <span>{b.name}</span>
-                                        </label>
-                                    ))}
-                                </div>
                             </div>
                         )}
                     </div>
