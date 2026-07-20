@@ -178,6 +178,8 @@ export default function Layout({ page, onNavigate, children, groupView }) {
 
     const visibleItems = NAV_ITEMS.filter((item) =>
         (role === 'Admin' || role === 'Super Admin' || item.roles.includes(role))
+    ).filter((item) =>
+        !(demoMode === 'risk-only' && (item.group === 'Governance' || item.group === 'Compliance'))
     );
 
     // Build a list of { type: 'heading'|'item', ... } for rendering.
@@ -263,42 +265,26 @@ export default function Layout({ page, onNavigate, children, groupView }) {
                                 padding: '12px 12px 2px',
                                 fontSize: 13,
                                 fontWeight: 700,
-                                color: (demoMode === 'risk-only' && (el.label === 'Governance' || el.label === 'Compliance'))
-                                    ? 'var(--color-text-muted)' : 'var(--color-text)',
+                                color: 'var(--color-text)',
                                 userSelect: 'none',
                                 marginTop: i === 0 ? 0 : 6,
                                 borderTop: i === 0 ? 'none' : '1px solid var(--color-border)',
                                 paddingTop: i === 0 ? 4 : 12,
                                 textAlign: ar ? 'right' : 'left',
-                                opacity: (demoMode === 'risk-only' && (el.label === 'Governance' || el.label === 'Compliance')) ? 0.45 : 1,
                             }}
                         >
                             {groupLabel(el.label)}
-                            {demoMode === 'risk-only' && (el.label === 'Governance' || el.label === 'Compliance') && (
-                                <span style={{ fontSize: 10, fontWeight: 500, marginLeft: 6, color: 'var(--color-text-muted)' }}>— not in scope</span>
-                            )}
                         </div>
-                    ) : (() => {
-                        const isGreyedOut = demoMode === 'risk-only' &&
-                            (el.item.group === 'Governance' || el.item.group === 'Compliance');
-                        return (
-                            <button
-                                key={el.item.id}
-                                className={`nav-link ${page === el.item.id ? 'active' : ''}`}
-                                style={{
-                                    textAlign: ar ? 'right' : 'left',
-                                    opacity: isGreyedOut ? 0.4 : 1,
-                                    cursor: isGreyedOut ? 'not-allowed' : 'pointer',
-                                    pointerEvents: isGreyedOut ? 'none' : 'auto',
-                                }}
-                                onClick={() => !isGreyedOut && onNavigate(el.item.id)}
-                                disabled={isGreyedOut}
-                                title={isGreyedOut ? 'Not included in this demo' : undefined}
-                            >
-                                {navLabel(el.item)}
-                            </button>
-                        );
-                    })()
+                    ) : (
+                        <button
+                            key={el.item.id}
+                            className={`nav-link ${page === el.item.id ? 'active' : ''}`}
+                            style={{ textAlign: ar ? 'right' : 'left' }}
+                            onClick={() => onNavigate(el.item.id)}
+                        >
+                            {navLabel(el.item)}
+                        </button>
+                    )
                 )}
 
                 {/* ── Consultant section (platform-level, not company-scoped) ── */}
