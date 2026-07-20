@@ -1,0 +1,14 @@
+{
+  "name": "Qatar Post GRC Workstation",
+  "short_name": "QPost GRC",
+  "description": "Qatar Post GRC Workstation — governance, risk, and compliance management platform.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#1B3A6B",
+  "background_color": "#1B3A6B",
+  "icons": [
+    { "src": "/favicon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/favicon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
