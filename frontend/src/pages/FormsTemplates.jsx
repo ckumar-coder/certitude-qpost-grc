@@ -1,8 +1,48 @@
 import { useState } from 'react';
+import PptxGenJS from 'pptxgenjs';
 import { useAuth } from '../AuthContext';
 import { useT } from '../contexts/LanguageContext';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+// pptxgenjs wants hex colors without the leading '#'.
+function hex(c) {
+    return (c || '1B3A6B').replace('#', '');
+}
+
+// Shared branded slide master — logo/company top-left, thin accent bar, footer
+// with confidential/report-name text, and a real auto-incrementing slide number
+// (native to the PPTX format, unlike page numbers in browser-printed HTML).
+function addQpMaster(pptx, { primary, logoUrl, company, footerLabel }) {
+    const p = hex(primary);
+    const objects = [
+        { rect: { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: p } } },
+        { line: { x: 0.4, y: 7.1, w: 12.53, h: 0, line: { color: 'CBD5E1', width: 0.75 } } },
+        { text: { text: `CONFIDENTIAL — ${company}`, options: { x: 0.4, y: 7.18, w: 4.5, h: 0.28, fontSize: 8, color: '94A3B8' } } },
+        { text: { text: footerLabel, options: { x: 4.9, y: 7.18, w: 4.5, h: 0.28, fontSize: 8, color: '94A3B8', align: 'center' } } },
+    ];
+    if (logoUrl) {
+        objects.push({ image: { path: logoUrl, x: 0.4, y: 0.3, w: 1.5, h: 0.5, sizing: { type: 'contain', w: 1.5, h: 0.5 } } });
+    } else {
+        objects.push({ text: { text: company, options: { x: 0.4, y: 0.3, w: 5, h: 0.5, fontSize: 16, bold: true, color: p } } });
+    }
+    pptx.defineSlideMaster({
+        title: 'QP_MASTER',
+        background: { color: 'FFFFFF' },
+        objects,
+        slideNumber: { x: 12.4, y: 7.18, fontSize: 8, color: '94A3B8' },
+    });
+}
+
+// KPI "stat card" — thin colored top bar + light card body, mirroring the HTML
+// report's .border-top-3px styling using two stacked shapes (pptxgenjs rects
+// don't support per-side borders).
+function addStatCard(slide, { x, y, w, h, value, label, color }) {
+    slide.addShape('rect', { x, y, w, h: 0.045, fill: { color } });
+    slide.addShape('rect', { x, y: y + 0.045, w, h: h - 0.045, fill: { color: 'F8FAFC' } });
+    slide.addText(String(value), { x: x + 0.12, y: y + 0.12, w: w - 0.24, h: h * 0.55, fontSize: 24, bold: true, color, fontFace: 'Arial' });
+    slide.addText(label.toUpperCase(), { x: x + 0.12, y: y + h * 0.6, w: w - 0.24, h: h * 0.3, fontSize: 8, color: '64748B', fontFace: 'Arial' });
+}
 
 function fmtDate(iso) {
     if (!iso) return '—';
@@ -180,12 +220,91 @@ function buildPrintHtml({ risks, commentary, perRisk, from, to, branding, genera
     <div class="footer">
         <span>CONFIDENTIAL — ${companyName}</span>
         <span>Accepted Risk Register &nbsp;|&nbsp; ${fmtDateLong(from)} – ${fmtDateLong(to)}</span>
-        <span>Page 1</span>
+        <span>Generated: ${fmtDateLong(new Date().toISOString())}</span>
     </div>
 
     <script>window.onload = () => window.print();</script>
 </body>
 </html>`;
+}
+
+// ── Accepted Risk Report PPTX builder ─────────────────────────────────────────
+
+async function buildAcceptedRiskPptx({ risks, commentary, perRisk, from, to, branding, generatedBy }) {
+    const primary     = branding?.branding_primary_color || '#1B3A6B';
+    const logoUrl      = branding?.branding_logo_url || '';
+    const companyName  = branding?.name || 'Company';
+    const p            = hex(primary);
+    const totalRisks   = risks.length;
+
+    const pptx = new PptxGenJS();
+    pptx.defineLayout({ name: 'QP_WIDE', width: 13.333, height: 7.5 });
+    pptx.layout = 'QP_WIDE';
+    addQpMaster(pptx, { primary, logoUrl, company: companyName, footerLabel: `Accepted Risk Register | ${fmtDateLong(from)} – ${fmtDateLong(to)}` });
+
+    const sectionTitle = (slide, title) => {
+        slide.addShape('rect', { x: 0.4, y: 1.02, w: 0.05, h: 0.32, fill: { color: p } });
+        slide.addText(title.toUpperCase(), { x: 0.56, y: 0.98, w: 10, h: 0.4, fontSize: 15, bold: true, color: p, fontFace: 'Arial' });
+    };
+
+    // ── Slide 1 — Cover ──────────────────────────────────────────────────────
+    let slide = pptx.addSlide({ masterName: 'QP_MASTER' });
+    slide.addText('Accepted Risk Register', { x: 0.6, y: 2.7, w: 12, h: 0.9, fontSize: 36, bold: true, color: p, fontFace: 'Arial' });
+    slide.addText(`For the period ${fmtDateLong(from)} to ${fmtDateLong(to)}`, { x: 0.6, y: 3.55, w: 12, h: 0.4, fontSize: 15, color: '64748B', fontFace: 'Arial' });
+    slide.addText(`Prepared by: ${generatedBy}  |  Generated: ${fmtDateLong(new Date().toISOString())}`, { x: 0.6, y: 3.95, w: 12, h: 0.4, fontSize: 13, color: '64748B', fontFace: 'Arial' });
+
+    // ── Slide 2 — Stats + Covering Statement ─────────────────────────────────
+    slide = pptx.addSlide({ masterName: 'QP_MASTER' });
+    sectionTitle(slide, 'Summary');
+    const stats = [
+        { label: 'Risks Accepted',    value: totalRisks, color: p },
+        { label: 'Extreme Residual',  value: risks.filter(r => parseInt(r.residual_score) >= 15).length, color: '7F1D1D' },
+        { label: 'High Residual',     value: risks.filter(r => parseInt(r.residual_score) >= 10 && parseInt(r.residual_score) < 15).length, color: 'C2410C' },
+    ];
+    stats.forEach((s, i) => addStatCard(slide, { x: 0.4 + i * 2.5, y: 1.6, w: 2.3, h: 1.2, value: s.value, label: s.label, color: s.color }));
+
+    if (commentary) {
+        slide.addShape('rect', { x: 0.4, y: 3.1, w: 0.05, h: 2.4, fill: { color: p } });
+        slide.addText('CRO Covering Statement', { x: 0.56, y: 3.05, w: 8, h: 0.3, fontSize: 10, bold: true, color: p, fontFace: 'Arial' });
+        slide.addText(commentary, { x: 0.56, y: 3.4, w: 11.5, h: 2.1, fontSize: 12, color: '374151', fontFace: 'Arial', valign: 'top' });
+    }
+
+    // ── Slide 3+ — Accepted Risks table (auto-paginates) ─────────────────────
+    slide = pptx.addSlide({ masterName: 'QP_MASTER' });
+    sectionTitle(slide, 'Accepted Risks');
+    const head = ['Risk ID', 'Risk Title', 'Category', 'Inherent', 'Residual', 'Date Accepted', 'Notes & Commentary'].map(t => ({
+        text: t, options: { fill: { color: p }, color: 'FFFFFF', bold: true, fontSize: 9 },
+    }));
+    const rows = risks.map((r, i) => {
+        const notes = [r.cro_notes, perRisk[r.id]].filter(Boolean).join(' — ');
+        return [
+            { text: r.risk_uid || `R-${String(i + 1).padStart(3, '0')}`, options: { fontSize: 9, bold: true, color: p } },
+            { text: r.title || '—', options: { fontSize: 9, bold: true } },
+            { text: `${r.risk_category || '—'}${r.sub_category ? ` / ${r.sub_category}` : ''}`, options: { fontSize: 8, color: '475569' } },
+            { text: String(r.inherent_score || '—'), options: { fontSize: 9, align: 'center', color: '92400E', fill: { color: 'FEF3C7' } } },
+            { text: String(r.residual_score || '—'), options: { fontSize: 9, align: 'center', color: '166534', fill: { color: 'DCFCE7' } } },
+            { text: fmtDateLong(r.cro_actioned_at), options: { fontSize: 8, color: '475569' } },
+            { text: notes || '—', options: { fontSize: 8, color: '374151' } },
+        ];
+    });
+    slide.addTable([head, ...(rows.length ? rows : [[{ text: 'No accepted risks in this period.', options: { colspan: 7, align: 'center', color: '94A3B8', fontSize: 10 } }]])], {
+        x: 0.4, y: 1.6, w: 12.53, colW: [1.1, 2.3, 1.6, 0.9, 0.9, 1.3, 4.43],
+        border: { type: 'solid', color: 'E2E8F0', pt: 0.5 },
+        autoPage: true, autoPageSlideStartY: 1.2, masterName: 'QP_MASTER',
+    });
+
+    // ── Final slide — Signature block ────────────────────────────────────────
+    slide = pptx.addSlide({ masterName: 'QP_MASTER' });
+    sectionTitle(slide, 'Sign-off');
+    slide.addShape('line', { x: 0.6, y: 2.6, w: 3.2, h: 0, line: { color: '94A3B8', width: 1 } });
+    slide.addText('Signature', { x: 0.6, y: 2.68, w: 3.2, h: 0.3, fontSize: 11, color: '475569', fontFace: 'Arial' });
+    slide.addText(generatedBy, { x: 0.6, y: 3.0, w: 3.2, h: 0.3, fontSize: 12, bold: true, color: '1E293B', fontFace: 'Arial' });
+    slide.addText('Chief Risk Officer', { x: 0.6, y: 3.3, w: 3.2, h: 0.3, fontSize: 10, color: '94A3B8', fontFace: 'Arial' });
+
+    slide.addShape('line', { x: 4.6, y: 2.6, w: 3.2, h: 0, line: { color: '94A3B8', width: 1 } });
+    slide.addText('Date', { x: 4.6, y: 2.68, w: 3.2, h: 0.3, fontSize: 11, color: '475569', fontFace: 'Arial' });
+
+    await pptx.writeFile({ fileName: `Accepted Risk Register — ${companyName} — ${fmtDateLong(from)} to ${fmtDateLong(to)}.pptx` });
 }
 
 // ── Accepted Risk Report panel ────────────────────────────────────────────────
@@ -218,6 +337,8 @@ function AcceptedRiskReport({ onBack }) {
         }
     }
 
+    const [pptxLoading, setPptxLoading] = useState(false);
+
     async function handlePrint() {
         const branding = await api.get('/companies/current/branding').catch(() => ({}));
         const activeCompany = session?.companies?.find(c => c.id === session.activeCompanyId);
@@ -227,6 +348,22 @@ function AcceptedRiskReport({ onBack }) {
         const html = buildPrintHtml({ risks, commentary, perRisk, from, to, branding, generatedBy });
         const win = window.open('', '_blank');
         if (win) { win.document.write(html); win.document.close(); }
+    }
+
+    async function handleExportPptx() {
+        setPptxLoading(true);
+        setError('');
+        try {
+            const branding = await api.get('/companies/current/branding').catch(() => ({}));
+            const activeCompany = session?.companies?.find(c => c.id === session.activeCompanyId);
+            const user = session?.user;
+            const generatedBy = user?.full_name || user?.email || 'CRO';
+            await buildAcceptedRiskPptx({ risks, commentary, perRisk, from, to, branding: branding?.name ? branding : activeCompany, generatedBy });
+        } catch (e) {
+            setError(e.message || 'Failed to export PowerPoint');
+        } finally {
+            setPptxLoading(false);
+        }
     }
 
     return (
@@ -337,6 +474,9 @@ function AcceptedRiskReport({ onBack }) {
                             />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+                            <button className="btn btn-secondary" onClick={handleExportPptx} disabled={pptxLoading}>
+                                {pptxLoading ? '⏳ Exporting…' : '📽 Export as PowerPoint'}
+                            </button>
                             <button className="btn btn-primary" onClick={handlePrint}>
                                 {t('forms_print')}
                             </button>
@@ -648,30 +788,232 @@ ${header('Issues Summary')}
 </html>`;
 }
 
+// ── Management Pack PPTX builder ──────────────────────────────────────────────
+
+async function buildManagementPackPptx({ data, branding, generatedBy }) {
+    const primary = branding?.branding_primary_color || '#1B3A6B';
+    const logoUrl = branding?.branding_logo_url || '';
+    const company = branding?.name || 'Company';
+    const today   = fmtDateLong(new Date().toISOString());
+    const p       = hex(primary);
+
+    const {
+        top_risks = [], kri_summary = {}, issues_summary = {},
+        compliance_summary = {}, risk_heatmap = [],
+        risk_distribution_by_dept = [],
+        appetite_breaches = [], tolerance_breaches = [],
+    } = data;
+
+    const totalRisks    = top_risks.length;
+    const openIssues    = issues_summary.open_count || 0;
+    const compliancePct = (() => {
+        const total = compliance_summary.overall?.total || 0;
+        const comp  = compliance_summary.overall?.Compliant || 0;
+        return total ? Math.round((comp / total) * 100) : null;
+    })();
+    const appetiteCount = (appetite_breaches?.length || 0) + (tolerance_breaches?.length || 0);
+
+    const bandColorHex = (score) => {
+        const n = parseInt(score, 10);
+        if (n >= 15) return '7F1D1D';
+        if (n >= 10) return 'C2410C';
+        if (n >= 5)  return 'B45309';
+        return '166534';
+    };
+    const bandBgHex = (score) => {
+        const n = parseInt(score, 10);
+        if (n >= 15) return 'FEE2E2';
+        if (n >= 10) return 'FFEDD5';
+        if (n >= 5)  return 'FEF9C3';
+        return 'DCFCE7';
+    };
+    const cellBgHex = (score) => {
+        if (score >= 15) return '7F1D1D';
+        if (score >= 10) return 'C2410C';
+        if (score >= 5)  return 'B45309';
+        return '166534';
+    };
+
+    const pptx = new PptxGenJS();
+    pptx.defineLayout({ name: 'QP_WIDE', width: 13.333, height: 7.5 });
+    pptx.layout = 'QP_WIDE';
+    addQpMaster(pptx, { primary, logoUrl, company, footerLabel: 'Risk Management Pack' });
+
+    const sectionTitle = (slide, title) => {
+        slide.addShape('rect', { x: 0.4, y: 1.02, w: 0.05, h: 0.32, fill: { color: p } });
+        slide.addText(title.toUpperCase(), { x: 0.56, y: 0.98, w: 10, h: 0.4, fontSize: 15, bold: true, color: p, fontFace: 'Arial' });
+    };
+
+    // ── Slide 1 — Cover ──────────────────────────────────────────────────────
+    let slide = pptx.addSlide({ masterName: 'QP_MASTER' });
+    slide.addText('Risk Management Pack', { x: 0.6, y: 2.9, w: 12, h: 0.9, fontSize: 40, bold: true, color: p, fontFace: 'Arial' });
+    slide.addText(`Prepared by: ${generatedBy}`, { x: 0.6, y: 3.8, w: 12, h: 0.4, fontSize: 15, color: '64748B', fontFace: 'Arial' });
+    slide.addText(`Generated: ${today}`, { x: 0.6, y: 4.15, w: 12, h: 0.4, fontSize: 15, color: '64748B', fontFace: 'Arial' });
+
+    // ── Slide 2 — Executive Summary ──────────────────────────────────────────
+    slide = pptx.addSlide({ masterName: 'QP_MASTER' });
+    sectionTitle(slide, 'Executive Summary');
+    const kpis = [
+        { label: 'Risks Tracked',     value: totalRisks,                                   color: p },
+        { label: 'Red KRIs',          value: kri_summary.red || 0,                         color: (kri_summary.red || 0) > 0 ? 'C0152A' : '127A47' },
+        { label: 'Open Issues',       value: openIssues,                                   color: openIssues > 0 ? 'D9500A' : '127A47' },
+        { label: 'Compliance Rate',   value: compliancePct !== null ? `${compliancePct}%` : '—', color: compliancePct === null ? '64748B' : compliancePct >= 80 ? '127A47' : compliancePct >= 60 ? 'C07D0A' : 'C0152A' },
+        { label: 'Appetite Breaches', value: appetiteCount,                                color: appetiteCount > 0 ? 'C0152A' : '127A47' },
+    ];
+    const kpiW = 2.32, kpiGap = 0.2;
+    kpis.forEach((k, i) => addStatCard(slide, { x: 0.4 + i * (kpiW + kpiGap), y: 1.6, w: kpiW, h: 1.3, value: k.value, label: k.label, color: k.color }));
+
+    // ── Slide 3 — Risk Heatmap ───────────────────────────────────────────────
+    slide = pptx.addSlide({ masterName: 'QP_MASTER' });
+    sectionTitle(slide, 'Risk Heatmap (Residual)');
+    const heatRows = [];
+    const headerRow = [{ text: 'Impact ↓ / Likelihood →', options: { fill: { color: 'FFFFFF' }, fontSize: 8, color: '64748B' } }];
+    [1, 2, 3, 4, 5].forEach(l => headerRow.push({ text: String(l), options: { fill: { color: 'FFFFFF' }, fontSize: 9, bold: true, color: '475569', align: 'center' } }));
+    heatRows.push(headerRow);
+    for (let impact = 5; impact >= 1; impact--) {
+        const row = [{ text: String(impact), options: { fill: { color: 'FFFFFF' }, fontSize: 9, bold: true, color: '475569', align: 'center' } }];
+        for (let likelihood = 1; likelihood <= 5; likelihood++) {
+            const cell = risk_heatmap.find(c => c.likelihood === likelihood && c.impact === impact) || { count: 0, score: likelihood * impact };
+            row.push({
+                text: cell.count > 0 ? String(cell.count) : '',
+                options: { fill: { color: cellBgHex(cell.score) }, fontSize: 12, bold: true, color: 'FFFFFF', align: 'center' },
+            });
+        }
+        heatRows.push(row);
+    }
+    slide.addTable(heatRows, { x: 0.4, y: 1.6, w: 6.5, h: 3.2, colW: [1.3, 1.04, 1.04, 1.04, 1.04, 1.04], border: { type: 'solid', color: 'FFFFFF', pt: 2 } });
+    const legend = [['Low (1–4)', '166534'], ['Medium (5–9)', 'B45309'], ['High (10–14)', 'C2410C'], ['Extreme (15–25)', '7F1D1D']];
+    legend.forEach(([label, color], i) => {
+        slide.addShape('rect', { x: 0.4 + i * 1.9, y: 5.05, w: 0.16, h: 0.16, fill: { color } });
+        slide.addText(label, { x: 0.62 + i * 1.9, y: 5.0, w: 1.7, h: 0.25, fontSize: 9, color: '64748B', fontFace: 'Arial' });
+    });
+
+    // ── Slide 4 — Top 10 Risks ───────────────────────────────────────────────
+    slide = pptx.addSlide({ masterName: 'QP_MASTER' });
+    sectionTitle(slide, 'Top 10 Risks by Residual Score');
+    const topHead = ['Risk ID', 'Risk Description', 'Department', 'Owner', 'Residual', 'Trend'].map(t => ({
+        text: t, options: { fill: { color: p }, color: 'FFFFFF', bold: true, fontSize: 9 },
+    }));
+    const topRows = top_risks.slice(0, 10).map((r, i) => ([
+        { text: r.risk_uid || `R-${String(i + 1).padStart(3, '0')}`, options: { fontSize: 9, bold: true, color: p } },
+        { text: r.risk_detail || '—', options: { fontSize: 9 } },
+        { text: r.department || '—', options: { fontSize: 9, color: '475569' } },
+        { text: r.risk_owner || '—', options: { fontSize: 9, color: '475569' } },
+        { text: String(r.residual_score || '—'), options: { fontSize: 9, bold: true, color: bandColorHex(r.residual_score), fill: { color: bandBgHex(r.residual_score) }, align: 'center' } },
+        { text: r.directional_trend === 'Increasing' ? '↑' : r.directional_trend === 'Decreasing' ? '↓' : '→', options: { fontSize: 11, align: 'center' } },
+    ]));
+    slide.addTable([topHead, ...(topRows.length ? topRows : [[{ text: 'No risks recorded.', options: { colspan: 6, align: 'center', color: '94A3B8', fontSize: 10 } }]])], {
+        x: 0.4, y: 1.6, w: 12.53, colW: [1.1, 5.83, 1.9, 1.7, 1.0, 1.0],
+        border: { type: 'solid', color: 'E2E8F0', pt: 0.5 },
+        autoPage: true, autoPageSlideStartY: 1.2, masterName: 'QP_MASTER',
+    });
+
+    // ── Slide — Risk Distribution by Department ──────────────────────────────
+    slide = pptx.addSlide({ masterName: 'QP_MASTER' });
+    sectionTitle(slide, 'Risk Distribution by Department');
+    const deptHead1 = [
+        { text: 'Department', options: { fill: { color: p }, color: 'FFFFFF', bold: true, fontSize: 9, rowspan: 2 } },
+        { text: 'Inherent', options: { fill: { color: p }, color: 'FFFFFF', bold: true, fontSize: 9, colspan: 3, align: 'center' } },
+        { text: 'Residual', options: { fill: { color: p }, color: 'FFFFFF', bold: true, fontSize: 9, colspan: 3, align: 'center' } },
+        { text: 'Total', options: { fill: { color: p }, color: 'FFFFFF', bold: true, fontSize: 9, rowspan: 2, align: 'center' } },
+    ];
+    const deptHead2 = ['Extreme', 'High', 'Medium', 'Extreme', 'High', 'Medium'].map(t => ({
+        text: t, options: { fill: { color: p, transparency: 20 }, color: 'FFFFFF', fontSize: 8, align: 'center' },
+    }));
+    const deptRows = risk_distribution_by_dept.slice(0, 12).map(d => ([
+        { text: d.department, options: { fontSize: 9, bold: true } },
+        { text: String(d.inherent.extreme || 0), options: { fontSize: 9, align: 'center' } },
+        { text: String(d.inherent.high || 0), options: { fontSize: 9, align: 'center' } },
+        { text: String(d.inherent.moderate || 0), options: { fontSize: 9, align: 'center' } },
+        { text: String(d.residual.extreme || 0), options: { fontSize: 9, align: 'center' } },
+        { text: String(d.residual.high || 0), options: { fontSize: 9, align: 'center' } },
+        { text: String(d.residual.moderate || 0), options: { fontSize: 9, align: 'center' } },
+        { text: String(d.residual.total || 0), options: { fontSize: 9, bold: true, align: 'center' } },
+    ]));
+    slide.addTable([deptHead1, deptHead2, ...(deptRows.length ? deptRows : [[{ text: 'No department data.', options: { colspan: 8, align: 'center', color: '94A3B8', fontSize: 10 } }]])], {
+        x: 0.4, y: 1.6, w: 12.53, colW: [2.53, 1.4, 1.4, 1.4, 1.4, 1.4, 1.4, 1.6],
+        border: { type: 'solid', color: 'E2E8F0', pt: 0.5 },
+        autoPage: true, autoPageSlideStartY: 1.2, masterName: 'QP_MASTER',
+    });
+
+    // ── Slide — KRI Status ────────────────────────────────────────────────────
+    slide = pptx.addSlide({ masterName: 'QP_MASTER' });
+    sectionTitle(slide, 'Key Risk Indicators (KRI) Status');
+    const kriStats = [
+        { label: 'Green',   value: kri_summary.green || 0, color: '127A47' },
+        { label: 'Amber',   value: kri_summary.amber || 0, color: 'B45309' },
+        { label: 'Red',     value: kri_summary.red || 0,   color: 'C0152A' },
+        { label: 'No Data', value: kri_summary.none || 0,  color: '64748B' },
+    ];
+    kriStats.forEach((k, i) => addStatCard(slide, { x: 0.4 + i * (kpiW + kpiGap), y: 1.6, w: kpiW, h: 1.1, value: k.value, label: k.label, color: k.color }));
+    const redItems = kri_summary.red_items || [];
+    if (redItems.length) {
+        const kriHead = ['KRI ID', 'Indicator Name', 'Current Value'].map(t => ({ text: t, options: { fill: { color: p }, color: 'FFFFFF', bold: true, fontSize: 9 } }));
+        const kriRows = redItems.map(k => ([
+            { text: k.kri_uid, options: { fontSize: 9, bold: true, color: 'C0152A' } },
+            { text: k.name, options: { fontSize: 9 } },
+            { text: String(k.current_value ?? '—'), options: { fontSize: 9, align: 'center' } },
+        ]));
+        slide.addTable([kriHead, ...kriRows], { x: 0.4, y: 3.1, w: 8, colW: [1.3, 5.2, 1.5], border: { type: 'solid', color: 'E2E8F0', pt: 0.5 } });
+    } else {
+        slide.addText('✅ No KRIs currently in breach.', { x: 0.4, y: 3.1, w: 8, h: 0.4, fontSize: 11, color: '64748B', fontFace: 'Arial' });
+    }
+
+    // ── Slide — Issues Summary ────────────────────────────────────────────────
+    slide = pptx.addSlide({ masterName: 'QP_MASTER' });
+    sectionTitle(slide, 'Issues Summary');
+    const issueColors = { Critical: 'C0152A', High: 'C2410C', Medium: 'B45309', Low: '127A47' };
+    ['Critical', 'High', 'Medium', 'Low'].forEach((label, i) => {
+        const count = (issues_summary.by_priority || {})[label] || 0;
+        addStatCard(slide, { x: 0.4 + i * (kpiW + kpiGap), y: 1.6, w: kpiW, h: 1.2, value: count, label, color: issueColors[label] });
+    });
+
+    await pptx.writeFile({ fileName: `Risk Management Pack — ${company} — ${new Date().toISOString().slice(0, 10)}.pptx` });
+}
+
 // ── Management Pack component ─────────────────────────────────────────────────
 
 function ManagementPack({ onBack }) {
     const { api, session } = useAuth();
-    const [loading, setLoading] = useState(false);
-    const [error, setError]     = useState('');
+    const [loading, setLoading]       = useState(false);
+    const [pptxLoading, setPptxLoading] = useState(false);
+    const [error, setError]           = useState('');
 
     const activeCompany = session?.companies?.find(c => c.id === session.activeCompanyId);
     const generatedBy   = session?.user?.full_name || session?.user?.email || 'Administrator';
+
+    async function loadPackData() {
+        const data     = await api.get('/dashboard/management-summary');
+        const branding = await api.get('/companies/current/branding').catch(() => activeCompany);
+        return { data, branding: branding || activeCompany };
+    }
 
     async function handleGenerate() {
         setLoading(true);
         setError('');
         try {
-            const data     = await api.get('/dashboard/management-summary');
-            const branding = await api.get('/companies/current/branding').catch(() => activeCompany);
-            const html     = buildManagementPackHtml({ data, branding: branding || activeCompany, generatedBy });
-            const win      = window.open('', '_blank');
+            const { data, branding } = await loadPackData();
+            const html = buildManagementPackHtml({ data, branding, generatedBy });
+            const win  = window.open('', '_blank');
             win.document.write(html);
             win.document.close();
         } catch (e) {
             setError(e.message || 'Failed to generate Management Pack');
         } finally {
             setLoading(false);
+        }
+    }
+
+    async function handleExportPptx() {
+        setPptxLoading(true);
+        setError('');
+        try {
+            const { data, branding } = await loadPackData();
+            await buildManagementPackPptx({ data, branding, generatedBy });
+        } catch (e) {
+            setError(e.message || 'Failed to export PowerPoint');
+        } finally {
+            setPptxLoading(false);
         }
     }
 
@@ -683,12 +1025,17 @@ function ManagementPack({ onBack }) {
                     <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>📊 Risk Management Pack</h2>
                 </div>
                 <p style={{ margin: '0 0 20px', fontSize: 14, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
-                    Generates a print-ready Management Pack with the current dashboard data — Risk Heatmap, Top Risks, KRI Status, Issues Summary, and Department Risk Distribution — formatted on company letterhead.
+                    Generates a Management Pack with the current dashboard data — Risk Heatmap, Top Risks, KRI Status, Issues Summary, and Department Risk Distribution — formatted on company letterhead. Available as a print-ready page or a PowerPoint deck you can drop straight into a board presentation.
                 </p>
                 {error && <div className="alert alert-danger" style={{ marginBottom: 16 }}>{error}</div>}
-                <button className="btn btn-primary" onClick={handleGenerate} disabled={loading}>
-                    {loading ? '⏳ Generating…' : '🖨 Generate & Print Management Pack'}
-                </button>
+                <div style={{ display: 'flex', gap: 10 }}>
+                    <button className="btn btn-primary" onClick={handleGenerate} disabled={loading || pptxLoading}>
+                        {loading ? '⏳ Generating…' : '🖨 Generate & Print Management Pack'}
+                    </button>
+                    <button className="btn btn-secondary" onClick={handleExportPptx} disabled={loading || pptxLoading}>
+                        {pptxLoading ? '⏳ Exporting…' : '📽 Export as PowerPoint'}
+                    </button>
+                </div>
             </div>
         </div>
     );
