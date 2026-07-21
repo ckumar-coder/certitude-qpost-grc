@@ -1,3 +1,6 @@
+// Glossary.jsx — Glossary page. Viewing is open to everyone; `isAdmin`
+// (below) gates adding/editing/deleting custom terms to Admin only. See
+// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx section 3.6.
 import { useEffect, useState } from 'react';
 import { useAuth } from '../AuthContext';
 import { useT } from '../contexts/LanguageContext';

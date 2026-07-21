@@ -1,3 +1,11 @@
+// ControlLibrary.jsx — Control Library (B2) page.
+// Role gating: `canTest` (below) is Admin/Risk Manager/CRO/Consultant CRO
+// only — Risk Champion/Owner/Viewer can view controls and test history but
+// not record a new test result. Create/edit controls is a broader set
+// (see docs/API_REFERENCE.md "Control Library"). See
+// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx section 3.6 for
+// the full audit of this and the other 16 frontend files with local
+// capability flags like this one.
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../AuthContext';
 import DepartmentField from '../components/DepartmentField';

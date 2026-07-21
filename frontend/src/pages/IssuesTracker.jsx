@@ -1,3 +1,12 @@
+// IssuesTracker.jsx — Issues & Actions (D) page.
+// Role gating: `canEdit` (below, action-item level) covers Admin, Risk
+// Manager, Risk Champion, Risk Owner, CRO — Consultant CRO is NOT
+// explicitly listed here (unlike most other CRO-gated checks in this
+// codebase, it does not rely on the backend's CRO->Consultant CRO
+// auto-expand since this is a frontend-only flag). Separation-of-duties
+// (closer/verifier != owner) is enforced server-side by identity
+// comparison, not reflected in this flag. See
+// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx section 3.6.
 import { Fragment, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../AuthContext';

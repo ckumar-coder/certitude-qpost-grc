@@ -1,5 +1,9 @@
 // CompanySelect.jsx — V2.0 collapsible hierarchical company picker
 // Blue/green alternating colour scheme per company.
+// Role gating: `isAdmin` (below) shows admin-only company-switcher
+// options, true for Admin role OR the separate is_consultant account
+// flag (a different authorization axis — see
+// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx section 3.6).
 
 import { useState } from 'react';
 import { useAuth } from '../AuthContext';

@@ -1,3 +1,9 @@
+// MyTasks.jsx — My Tasks page, the identity-scoped cross-module inbox.
+// Section visibility below is role-conditional (Viewer sees no task
+// groups; Risk Champion/CRO-tier/Admin see different groups), but the
+// underlying data is always filtered to the logged-in user, not a
+// department or role scope. See
+// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx section 3.6.
 import { useEffect, useState } from 'react';
 import { useAuth } from '../AuthContext';
 import Sparkline, { bandBadgeClass } from '../components/Sparkline';

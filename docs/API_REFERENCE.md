@@ -1,194 +1,221 @@
 # API Reference
 
-A curated endpoint catalog (not a full OpenAPI spec, given the size of the
-API -- see `docs/SCOPE_NOTES.md`). Grouped by module, in the order they
-appear in `server.js`. "Role" is the minimum `requireRole(...)` -- routes
-with no role listed are reachable by any authenticated user (Viewer
-included), and a few are public (no authentication at all, noted
-explicitly).
+A curated endpoint catalog (not a full OpenAPI spec), grouped by module.
+"Role" is the minimum `requireRole(...)` today — routes with no role
+listed are reachable by any authenticated user with an active company
+session. Two rules apply everywhere and aren't repeated per row: **Admin
+and Super Admin bypass every role check unconditionally**, and **any list
+that includes `CRO` automatically also admits `Consultant CRO`** via an
+auto-expand rule inside `requireRole()` itself.
 
-All routes except `/healthz`, `/api/branding`, `/api/auth/*`, and the SPA
-fallback (`*`) require an active session and an active company
-(`req.company`), and are department-scoped for Managers where the module
-has a `department`/`applicable_to` field (see `ARCHITECTURE.md` section 2).
+> Rewritten 2026-07-21 from a full route-by-route audit of the current
+> `server.js` (~120 distinct routes), replacing the previous version which
+> catalogued the original ~3,600-line build. The complete audit, with exact
+> line numbers, lives in `Documents/Internal/RBAC_Permissions_Engine_Scoping.docx`
+> section 3.1 — this file is the readable summary of it.
 
-## System
+## System & auth
 
-| Method | Path | Role | Purpose |
+| Method | Path | Role | Notes |
 |---|---|---|---|
-| GET | `/healthz` | (public) | Liveness + DB connectivity check (Phase 8) |
-| GET | `/api/branding` | (public) | Instance-wide branding for the login screen (G9) |
+| GET | `/healthz`, `/api/version` | Public | Liveness + version check |
+| GET | `/api/branding` | Public | Pre-login branding lookup |
+| \* | `/api/auth/*` (login, logout, me, mfa, change-password, reset, switch-company) | Authenticated | Identity/session actions, not authorization |
+| POST | `/api/setup/initialize` | Authenticated | First-time setup only |
 
-## Auth & session (G8)
+## Admin / company settings
 
-| Method | Path | Role | Purpose |
-|---|---|---|---|
-| POST | `/api/auth/login` | (public) | Email/password login; returns session token + companies |
-| POST | `/api/auth/logout` | any | Destroys the current session |
-| GET | `/api/auth/me` | any | Current user, companies (with roles/branding), active company |
-| POST | `/api/auth/switch-company` | any | Sets the session's active company |
-| POST | `/api/auth/change-password` | any | Change password (enforces policy, history, clears forced-change flag) |
+| Method | Path | Role |
+|---|---|---|
+| GET/PUT | `/api/email-settings`, POST `/test` | Admin |
+| GET/PATCH | `/api/companies/current/branding` | Admin |
+| PUT | `/api/companies/current/profile` | Admin |
+| GET/POST/PUT/DELETE | `/api/companies*` | Admin |
+| PUT | `/api/users/:id/group-access` | Admin |
+| CRUD | `/api/departments*`, `/api/business-units*` | Admin |
+| GET | `/api/admin/storage-stats`, `/api/admin/security-log` | Admin |
+| DELETE | `/api/admin/evidence/bulk` | Admin |
+| GET | `/api/admin/ai-settings` | Admin, CRO, Consultant CRO, Risk Manager |
+| PATCH | `/api/admin/ai-settings` | Admin |
 
-## Company configuration
+## Risk configuration
 
-| Method | Path | Role | Purpose |
-|---|---|---|---|
-| GET | `/api/categories` | any | List risk categories for the active company |
-| POST | `/api/categories` | Admin | Add a risk category |
-| DELETE | `/api/categories` | Admin | Remove a risk category |
-| GET | `/api/matrix/config` | any | Risk matrix dimensions + fiscal year start |
-| POST | `/api/matrix/config` | Admin | Update matrix configuration |
-| GET | `/api/companies/current/branding` | any | Current company's branding (G9) |
-| PATCH | `/api/companies/current/branding` | Admin | Update logo/primary color (G9) |
-| GET | `/api/taxonomies/:type` | any | List controlled-vocabulary terms (`cause` or `consequence`) |
-| POST | `/api/taxonomies/:type` | Admin, Manager | Add a new term (available to everyone afterwards) |
-| DELETE | `/api/taxonomies/:type` | Admin | Remove a term |
+| Method | Path | Role |
+|---|---|---|
+| CRUD | `/api/risk-categories`, `/api/risk-sub-categories` | Admin |
+| GET | `/api/risk-taxonomy`, `/api/taxonomies/:type` | Public (read) |
+| POST | `/api/taxonomies/:type` | Admin, Risk Manager, Risk Champion, CRO |
+| DELETE | `/api/taxonomies/:type` | Admin |
+| POST/GET | `/api/matrix/config` | Write: Admin. Read: public |
+| GET | `/api/scoring-methodology` | Admin, Risk Manager, Risk Champion, Risk Owner, CRO, Consultant CRO, Viewer |
+| POST | `/api/scoring-methodology` | CRO, Consultant CRO only (Admin notably excluded — see `docs/SCOPE_NOTES.md`) |
 
-## Risk Register (B1)
+## Users & Access
 
-| Method | Path | Role | Purpose |
-|---|---|---|---|
-| GET | `/api/risks` | any | List risks (current version, department-scoped for Managers; excludes Closed risk chains unless `?include_closed=true`) |
-| POST | `/api/risks` | Admin, Manager | Create a new risk (new version 1); auto-approved for Admin, "Awaiting Approval" for Manager |
-| POST | `/api/risks/:id/approve` | Admin | Approve a Manager-submitted risk |
-| POST | `/api/risks/:id/close` | Admin, Manager | Close a risk (new version, `risk_status='Closed'`, requires `closure_reason`) |
-| POST | `/api/risks/:id/reopen` | Admin, Manager | Reopen a closed risk (new version, `risk_status='Active'`) |
-| GET | `/api/risks/:uid/related` | Admin, Manager | List risks linked to this one as interdependencies |
-| POST | `/api/risks/:uid/related` | Admin, Manager | Link this risk to another by UID, with an optional note |
-| DELETE | `/api/risks/:uid/related/:otherUid` | Admin, Manager | Remove a risk interdependency link |
+| Method | Path | Role |
+|---|---|---|
+| GET/POST/PATCH/DELETE | `/api/users*` | Admin |
+| GET | `/api/users/risk-owners` | Admin, Risk Manager, Risk Champion, Risk Owner, CRO, Consultant CRO, Viewer |
+| POST | `/api/users/:id/active` | Admin |
 
-## Control Library (B2)
+## Risk Register & Mitigation
 
-| Method | Path | Role | Purpose |
-|---|---|---|---|
-| GET | `/api/controls` | Admin, Manager | List controls (department-scoped) |
-| POST | `/api/controls` | Admin, Manager | Create a control |
-| PATCH | `/api/controls/:id` | Admin, Manager | Edit a control |
-| POST | `/api/controls/:id/link-risk` | Admin, Manager | Link a control to a risk (`risk_controls`) |
-| DELETE | `/api/controls/:id/link-risk/:riskId` | Admin, Manager | Remove a control-risk link |
-| POST | `/api/controls/:id/test` | Admin, Manager | Record a control test result; Partially Effective/Ineffective requires a remediation plan/owner/due date and auto-creates a pre-filled Issue (D) |
-| GET | `/api/controls/:id/tests` | Admin, Manager | Test history for a control |
+| Method | Path | Role |
+|---|---|---|
+| GET | `/api/risks`, `/api/risks/:id` | List: any session. Detail: Admin, Risk Manager, Risk Champion, Risk Owner, CRO, Consultant CRO, Viewer |
+| GET | `/api/risks/next-id` | Admin, Risk Manager, Risk Champion, CRO |
+| POST | `/api/risks` | Risk Manager, Risk Champion, Risk Owner, CRO, Consultant CRO |
+| PATCH | `/api/risks/:id` | Risk Champion (own submission only), Risk Manager/Owner (own department), CRO/Consultant CRO (full) |
+| POST | `/api/risks/:id/approve` | Risk Manager, CRO, Consultant CRO |
+| POST | `/api/risks/:id/approver-approve`, `/approver-reject` | Risk Owner |
+| POST | `/api/risks/:id/manager-reject` | Risk Manager, Admin, CRO, Consultant CRO |
+| POST | `/api/risks/:id/close`, `/reopen` | Risk Manager, CRO, Consultant CRO |
+| POST | `/api/risks/:id/cro-accept`, `/cro-decline`, `/cro-comment` | CRO, Consultant CRO |
+| GET | `/api/risks/pending-cro` | Admin, CRO |
+| GET | `/api/departments/without-manager` | CRO, Consultant CRO, Admin |
+| GET/POST/DELETE | `/api/risks/:uid/related` | Admin, Risk Manager, Risk Champion, CRO |
+| POST/PUT/DELETE | `/api/risks/:id/mitigations`, `/api/mitigations/:id` | Risk Manager, Risk Champion, Risk Owner, CRO, Consultant CRO |
 
-## Key Risk Indicators (B3)
+## Control Library
 
-| Method | Path | Role | Purpose |
-|---|---|---|---|
-| GET | `/api/kris` | Admin, Manager | List KRIs with latest measurement, band, and sparkline history |
-| POST | `/api/kris` | Admin, Manager | Create a KRI |
-| PATCH | `/api/kris/:id` | Admin, Manager | Edit a KRI (incl. linked risks/controls) |
-| POST | `/api/kris/:id/measurements` | Admin, Manager | Record a measurement; auto-creates an Issue on Red breach (D) |
+| Method | Path | Role |
+|---|---|---|
+| GET | `/api/controls` | Admin, Risk Manager, Risk Champion, Risk Owner, CRO, Consultant CRO, Viewer |
+| GET | `/api/controls/next-id` | Admin, Risk Manager, Risk Champion, CRO |
+| POST/PATCH | `/api/controls`, `/api/controls/:id` | Admin, Risk Manager, Risk Champion, CRO |
+| POST/DELETE | link/unlink to risk, create-and-link | Admin, Risk Manager, Risk Champion, CRO |
+| POST | `/api/controls/:id/test` | Admin, Risk Manager, CRO, Consultant CRO |
+| GET | `/api/controls/:id/tests` | Admin, Risk Manager, CRO, Consultant CRO, Risk Champion, Risk Owner, Viewer |
 
-## Users & Access (H2)
+## KRI Library & Register
 
-| Method | Path | Role | Purpose |
-|---|---|---|---|
-| GET | `/api/users` | Admin | List users in the current company with roles/departments |
-| POST | `/api/users` | Admin | Add a user to the company (creates the user if new, with a temp password) |
-| PATCH | `/api/users/:userId` | Admin | Update a user's role/department/functional role |
-| DELETE | `/api/users/:userId` | Admin | Remove a user from the company (blocked if they're the last Admin) |
-| POST | `/api/users/:userId/active` | Admin | Activate/deactivate a user |
+| Method | Path | Role |
+|---|---|---|
+| GET | `/api/kris/next-id` | Admin, Risk Manager, CRO, Consultant CRO |
+| GET | `/api/kris`, `/api/kri-register` | Admin, Risk Manager, Risk Champion, Risk Owner, CRO, Consultant CRO, Viewer |
+| POST/PATCH | `/api/kris`, `/api/kris/:id` | Admin, Risk Manager, CRO, Consultant CRO |
+| POST | `/api/kris/:id/measurements` | Admin, Risk Manager, CRO, Consultant CRO |
 
-## Org Roles / RACI (A2)
+## Org Roles (RACI)
 
-| Method | Path | Role | Purpose |
-|---|---|---|---|
-| GET | `/api/org-roles` | Admin, Manager | List the Role -> Person -> Department directory |
-| POST | `/api/org-roles` | Admin, Manager | Add an entry |
-| PATCH | `/api/org-roles/:id` | Admin, Manager | Edit an entry |
-| DELETE | `/api/org-roles/:id` | Admin, Manager | Remove an entry |
+| Method | Path | Role |
+|---|---|---|
+| GET | `/api/org-roles`, `/api/raci-matrix` | Admin, Risk Manager, Risk Champion, Risk Owner, CRO, Consultant CRO, Viewer |
+| POST/PATCH/DELETE | `/api/org-roles*` | Admin, Risk Manager, CRO, Consultant CRO |
+| PATCH | `/api/raci-matrix/:id` | Admin, CRO, Consultant CRO |
 
-## Policy Repository (A1)
+## Policy Repository
 
-| Method | Path | Role | Purpose |
-|---|---|---|---|
-| GET | `/api/policies` | any | List policies (current version; Viewers see Published only) |
-| GET | `/api/policies/:uid/history` | Admin, Manager | Version history for a policy |
-| POST | `/api/policies` | Admin, Manager | Create a new policy (Draft, version 1) |
-| PATCH | `/api/policies/:id` | Admin, Manager | Edit a Draft/Under Review policy (incl. links) |
-| POST | `/api/policies/:id/transition` | Admin, Manager | Move through Draft -> Under Review -> Approved -> Published -> Archived (Approve/Publish are Admin-only) |
-| POST | `/api/policies/:id/new-version` | Admin, Manager | Spawn a new Draft revision from a Published policy |
-| POST | `/api/policies/:id/attest` | any | Record "I have read this policy" for the current user |
-| GET | `/api/policies/:id/attestations` | Admin, Manager | Roster of who has/hasn't attested |
+| Method | Path | Role |
+|---|---|---|
+| GET | `/api/policies` | Any session |
+| GET | `/api/policies/:uid/history`, `/:id/attestations` | Admin, Risk Manager, Risk Champion, CRO |
+| POST/PATCH | `/api/policies*`, `/:id/new-version` | Admin, Risk Manager, Risk Champion, CRO |
+| POST | `/api/policies/:id/transition` | Admin, Risk Manager, Risk Champion, Risk Owner, CRO |
+| POST | `/api/policies/:id/attest` | Admin, Risk Manager, Risk Champion, Risk Owner, CRO |
+| GET/POST/DELETE | `/api/policies/:id/access` | Admin only |
 
-## Compliance Obligations (C1)
+## Compliance Obligations
 
-| Method | Path | Role | Purpose |
-|---|---|---|---|
-| GET | `/api/obligations` | Admin, Manager | List obligations (department/`applicable_to`-scoped) |
-| POST | `/api/obligations` | Admin, Manager | Create an obligation |
-| PATCH | `/api/obligations/:id` | Admin, Manager | Edit an obligation (incl. links to policies/controls/KRIs/risks) |
-| POST | `/api/obligations/:id/status` | Admin, Manager | Change compliance status; logs to `obligation_status_history` |
-| GET | `/api/obligations/:id/history` | Admin, Manager | Status history for an obligation |
+| Method | Path | Role |
+|---|---|---|
+| GET | `/api/obligations` | Risk Manager, Risk Champion, Risk Owner, CRO, Consultant CRO, Viewer |
+| POST/PATCH | `/api/obligations*` | Admin, Risk Manager, CRO, Consultant CRO |
+| GET | `/api/obligations/:id/history` | Admin, Risk Manager, Risk Champion, CRO |
 
-## Audit Log (G10)
+## Issues & Actions
 
-| Method | Path | Role | Purpose |
-|---|---|---|---|
-| GET | `/api/audit-log` | Admin, Manager | Append-only log of state changes across all modules |
+| Method | Path | Role |
+|---|---|---|
+| GET | `/api/issues` | Risk Manager, Risk Champion, Risk Owner, CRO, Consultant CRO, Viewer |
+| POST/PATCH | `/api/issues*` | Admin, Risk Manager, Risk Champion, Risk Owner, CRO |
+| GET | `/api/issues/:id/actions` | Admin, Risk Manager, Risk Champion, Risk Owner, CRO, Viewer |
+| POST/PATCH/DELETE | action items | Admin, Risk Manager, Risk Champion, Risk Owner, CRO |
 
-## Issues & Actions Tracker (D)
+Creator/approver separation-of-duties is enforced by identity comparison
+(`created_by`), independent of role, and is not reflected in this table —
+see `docs/SCOPE_NOTES.md`.
 
-| Method | Path | Role | Purpose |
-|---|---|---|---|
-| GET | `/api/issues` | Admin, Manager | List issues (filterable by source type, department-scoped) |
-| POST | `/api/issues` | Admin, Manager | Create an issue (manual self-identified, audit, regulatory, etc.) |
-| PATCH | `/api/issues/:id` | Admin, Manager | Edit an issue (owner, due date, priority, links) |
-| POST | `/api/issues/:id/status` | Admin, Manager | Change status, incl. closure (separation-of-duties check) and Risk Accepted disposition |
+## Incident Log
 
-## Dashboards (F1/F2)
+| Method | Path | Role |
+|---|---|---|
+| GET | `/api/incidents` | Admin, Risk Manager, Risk Champion, Risk Owner, CRO, Consultant CRO, Viewer |
+| POST/PUT | `/api/incidents*` | Risk Manager, Risk Champion, Risk Owner, CRO, Consultant CRO — **Admin excluded** (known gap, see `docs/SCOPE_NOTES.md`) |
+| DELETE | `/api/incidents/:id` | Risk Manager, CRO, Consultant CRO only |
+| PATCH | `/:id/link-risk`, `/:id/dismiss` | Risk Manager, Risk Champion, Risk Owner, CRO, Consultant CRO |
 
-| Method | Path | Role | Purpose |
-|---|---|---|---|
-| GET | `/api/dashboard/management-summary` | Admin, Manager | F1: summary cards, heatmap, top risks, appetite breaches, reassessment flags, risk movement, KRI alerts, open issues, compliance status |
-| GET | `/api/dashboard/my-tasks` | any | F2: pending attestations, control tests due, my issues, policy reviews, my KRIs |
+## Risk Appetite
 
-## Bulk Import (H1)
+| Method | Path | Role |
+|---|---|---|
+| GET | `/api/risk-appetite*` | Admin, Risk Manager, Risk Champion, Risk Owner, CRO, Consultant CRO, and a role literally named `Approver` that doesn't exist in the assignable role list (see `docs/SCOPE_NOTES.md`) |
+| POST/DELETE | manage/history | Admin, CRO, Consultant CRO |
 
-| Method | Path | Role | Purpose |
-|---|---|---|---|
-| GET | `/api/import/:module/template` | Admin, Manager | Download a CSV template (header + example row) for `risks`, `controls`, `policies`, or `obligations` |
-| POST | `/api/import/:module` | Admin, Manager | Import a CSV (`{csv: "..."}`), up to 1,000 rows; per-row success/error report |
+## Horizon Scanning
 
-## Data Export (H6)
+| Method | Path | Role |
+|---|---|---|
+| GET | `/api/horizon-scans` | Admin, Risk Manager, Risk Champion, Risk Owner, CRO, Consultant CRO |
+| POST/PATCH | create/edit/convert | Admin, Risk Manager, CRO, Consultant CRO |
+| DELETE, `/ai-draft` | Admin, CRO, Consultant CRO (Risk Manager excluded from just these two) |
 
-| Method | Path | Role | Purpose |
-|---|---|---|---|
-| GET | `/api/export/:module` | Admin, Manager | CSV export of `risks`, `controls`, `kris`, `policies`, `obligations`, or `issues` (scoped to caller's access) |
+## Risk Governance Documents & Forms
 
-## Global Search (H8)
+| Method | Path | Role |
+|---|---|---|
+| GET/POST/DELETE | `/api/risk-gov/*` | Admin, Super Admin, CRO, Consultant CRO, Risk Manager |
+| GET | `/api/forms/accepted-risks` | Admin, Super Admin, CRO, Consultant CRO |
 
-| Method | Path | Role | Purpose |
-|---|---|---|---|
-| GET | `/api/search?q=...` | Admin, Manager | Search risks, controls, KRIs, obligations, issues, and policies by ID/name/keyword |
+## Dashboards, Audit, Evidence, Misc.
 
-## Escalation Rules & Notifications (G5)
+| Method | Path | Role |
+|---|---|---|
+| GET | `/api/dashboard/management-summary` | Risk Manager, Risk Champion, Risk Owner, CRO, Consultant CRO, Viewer |
+| GET | `/api/dashboard/my-tasks` | Any session (self-scoped) |
+| GET | `/api/audit-log` | Admin, Risk Manager, Risk Champion, Risk Owner, CRO, Consultant CRO — **excludes Viewer**, though the sidebar shows the link to Viewer too (known gap, see `docs/SCOPE_NOTES.md`) |
+| GET/POST | `/api/evidence/*` | View: Admin, Risk Manager, Risk Champion, Risk Owner, CRO, Consultant CRO, Viewer. Upload: same minus Viewer. Delete: Admin only |
+| GET/POST/PATCH | `/api/escalation-rules*` | Admin, CRO, Consultant CRO |
+| GET | `/api/notifications` | Admin, Risk Manager, Risk Champion, CRO |
+| GET/POST/DELETE | `/api/glossary*` | View: public. Manage: Admin |
+| GET | `/api/calendar` | Risk Manager, Risk Champion, Risk Owner, CRO, Consultant CRO, Viewer |
 
-| Method | Path | Role | Purpose |
-|---|---|---|---|
-| GET | `/api/escalation-rules` | Admin | List the company's escalation rules (one per trigger type) |
-| PATCH | `/api/escalation-rules/:id` | Admin | Edit a rule's thresholds, notify/escalate targets, channels, active flag |
-| GET | `/api/notifications` | Admin, Manager | Compute current notifications for the caller from active rules + live data |
+## Import / Export / Search
 
-## SPA fallback
+| Method | Path | Role |
+|---|---|---|
+| GET/POST | `/api/import/:module*` | Admin, Risk Manager, Risk Champion, CRO |
+| GET | `/api/export/:module` | Admin, Risk Manager, Risk Champion, CRO |
+| GET/POST | `/api/seed-controls*` | Admin |
+| GET | `/api/search` | Admin, Risk Manager, Risk Champion, CRO — **Risk Owner and Viewer excluded** (known gap, see `docs/SCOPE_NOTES.md`) |
 
-| Method | Path | Role | Purpose |
-|---|---|---|---|
-| GET | `*` | (public) | Serves `public/index.html` for any non-API path (client-side routing) |
+## Consultant layer & reference data
 
----
+| Method | Path | Role |
+|---|---|---|
+| GET/PATCH | `/api/consultant/*` | Gated by the `is_consultant` account flag, not by role — separate authorization axis |
+| GET | `/api/risk-library`, `/api/control-library-ref` | Public — static reference content |
 
 ## Common patterns
 
 - **Errors**: `{ "error": "message" }` with an appropriate HTTP status
   (400 validation, 401 auth, 403 role/scope, 404 not found, 423 locked
-  account, 503 for `/healthz` DB failure). Some 401 responses include a
-  structured `code` (`PASSWORD_CHANGE_REQUIRED`, `NO_ACTIVE_COMPANY`) the
-  frontend uses to redirect.
-- **Pagination**: none of the list endpoints paginate -- they return the
-  full result set for the company/department scope. Fine at SME data
+  account, 503 for `/healthz` DB failure).
+- **Pagination**: none of the list endpoints paginate — fine at SME data
   volumes; would need adding if a client's register grows very large.
-- **Versioned entities** (`risks`, `policies`, `compliance_obligations`):
-  list/get endpoints return the latest version per `*_uid`; edits insert a
-  new version row rather than updating in place (G10).
+- **Versioned entities** (`risks`): list/get endpoints return the latest
+  version per `risk_uid`; edits currently overwrite in place, with the
+  version number only incrementing on Close/Reopen (see
+  `docs/ARCHITECTURE.md` section 5).
 - **Audit trail**: writes to `audit_log` happen inside the same request as
-  the state change, via `logAudit()` -- not a separate async process.
+  the state change, via `logAudit()` — not a separate async process.
+- All routes except `/healthz`, `/api/branding`, `/api/auth/*`, and the SPA
+  fallback (`*`) require an active session and an active company
+  (`req.company`).
+- Department-scoped roles (`Risk Champion`, `Risk Owner`, `Risk Manager`)
+  are filtered server-side via `managerScopeClause()` wherever a module
+  has a `department` field — this doesn't change which routes are
+  reachable, only which rows come back.
+- For the full audit this table was generated from, including exact line
+  numbers and every inconsistency found, see
+  `Documents/Internal/RBAC_Permissions_Engine_Scoping.docx`.

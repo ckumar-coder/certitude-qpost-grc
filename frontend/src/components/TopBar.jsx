@@ -1,3 +1,9 @@
+// TopBar.jsx — global search + notification bell, shown in Layout's shell.
+// `canSearch` (below) includes Risk Owner — but the backend's
+// GET /api/search route excludes Risk Owner (docs/API_REFERENCE.md
+// "Import / Export / Search"), so a Risk Owner sees a working-looking
+// search box that 403s. Confirmed still true as of 2026-07-21; see
+// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx Finding 3.
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../AuthContext';
 import { useT } from '../contexts/LanguageContext';

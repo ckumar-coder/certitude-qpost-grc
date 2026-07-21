@@ -1,3 +1,7 @@
+// ComplianceObligations.jsx — Compliance Obligations Register (C1) page.
+// Role gating: `canManage` (below) is Admin/Risk Manager/CRO/Consultant
+// CRO — Risk Champion/Owner/Viewer have read-only access. See
+// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx section 3.6.
 import { Fragment, useEffect, useState } from 'react';
 import { useAuth } from '../AuthContext';
 import EvidenceAttachments from '../components/EvidenceAttachments';

@@ -1,3 +1,8 @@
+// DataTools.jsx — Import / Export / Search page. The Seed Controls wizard
+// (below) is Admin-only. Import/export themselves are gated per-module by
+// the backend (Admin, Risk Manager, Risk Champion, CRO — see
+// docs/API_REFERENCE.md "Import / Export / Search"). See
+// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx section 3.6.
 import { useState } from 'react';
 import { useAuth } from '../AuthContext';
 import { useT } from '../contexts/LanguageContext';

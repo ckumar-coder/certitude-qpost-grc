@@ -1,3 +1,73 @@
+// ============================================================================
+// ERM Workstation — backend entry point (Qatar Post's branded fork of
+// Certitude's GRC platform).
+//
+// This file is intentionally a single Express app rather than split into
+// per-module route files — see docs/ARCHITECTURE.md for why, and
+// docs/API_REFERENCE.md for the full endpoint catalog with roles. This
+// header is a navigation aid only; treat the two docs above as the source
+// of truth if anything here drifts.
+//
+// MODULE MAP — search for the "// ====" divider with this name to jump to
+// a module. Listed in the order they appear in the file.
+//
+//   Helpers                         — shared query/formatting utilities
+//   Department scoping (DEPT_SCOPED_ROLES, managerScopeClause, ...)
+//                                   — see the block comment above requireRole()
+//   Cookie helpers                  — session cookie set/clear (SOC 2 CC6.1)
+//   Auth middleware                 — authenticate / requireRole / requireCompany
+//   Auth routes                     — /api/auth/* (login, logout, me, MFA, switch-company)
+//   Password reset                  — unauthenticated /api/auth/reset-password/*
+//   Email settings                  — /api/email-settings (Admin only)
+//   Risk taxonomy                   — /api/risk-categories, /api/risk-sub-categories (Admin)
+//   Risk cause/consequence taxonomy — /api/taxonomies/:type
+//   Branding                        — /api/companies/current/branding (Admin)
+//   Departments / Business Units    — /api/departments, /api/business-units (Admin)
+//   Risk Register                  — /api/risks/* — see docs/API_REFERENCE.md
+//                                     "Risk Register & Mitigation" for the full role table
+//   Risk interdependencies          — /api/risks/:uid/related
+//   Control Library                 — /api/controls/*
+//   Key Risk Indicators (B3)        — /api/kris/*, /api/kri-register
+//   Org Roles                       — /api/org-roles (RACI directory)
+//   RACI Matrix                     — /api/raci-matrix
+//   Policy & Procedure Repository   — /api/policies/*
+//   Compliance Obligations Register — /api/obligations/*
+//   Issues & Actions Tracker        — /api/issues/*
+//   Issue Action Items              — /api/issues/:id/actions/*
+//   Dashboards                      — /api/dashboard/*
+//   Bulk Import                     — /api/import/:module/*
+//   Standard Controls Seeding       — /api/seed-controls/*  (Admin)
+//   Data Export                     — /api/export/:module
+//   Global Search                   — /api/search
+//   Escalation Rules & Notifications — /api/escalation-rules, /api/notifications
+//   Users & Access                  — /api/users/*  (Admin)
+//   Glossary                        — /api/glossary
+//   Compliance Calendar             — /api/calendar
+//   Scoring Methodology             — /api/scoring-methodology
+//   Evidence                        — /api/evidence/*
+//   Risk Appetite                   — /api/risk-appetite/*
+//   Company management              — /api/companies/*  (Admin)
+//   Consolidated summary            — /api/consolidated-summary (group dashboard view)
+//   Incident Log                    — /api/incidents/*
+//   Consultant Dashboard API        — /api/consultant/*  (requires is_consultant flag,
+//                                     a separate authorization axis from role — see
+//                                     Documents/Internal/RBAC_Permissions_Engine_Scoping.docx §4)
+//   AI Integration                  — /api/admin/ai-settings  (Admin)
+//   Horizon Scanning                — /api/horizon-scans/*
+//   Risk Governance Documents       — /api/risk-gov/*
+//   Forms & Templates               — /api/forms/*
+//
+// ROLE MODEL (as of 2026-07-21) — eight roles: Super Admin, Admin, Risk
+// Champion, Risk Owner, Risk Manager, CRO, Consultant CRO, Viewer. Two
+// blanket rules apply across every route below and are NOT repeated at
+// each call site (see the block comment above requireRole() for the code):
+//   1. Admin and Super Admin bypass every requireRole() check unconditionally.
+//   2. Any requireRole() list containing 'CRO' automatically also admits
+//      'Consultant CRO'.
+// Super Admin and Consultant CRO are planned for removal before Qatar Post
+// handover (not yet done — see CLAUDE.md "Engineering — pending items").
+// ============================================================================
+
 require('dotenv').config();
 
 const express = require('express');
@@ -2264,6 +2334,24 @@ app.delete(
     })
 );
 
+// ============================================================
+// Risk Register & Mitigation (B1) — /api/risks/*
+// ============================================================
+// The core module. Full role/scope table is in docs/API_REFERENCE.md
+// under "Risk Register & Mitigation" — summary:
+//   - Create: Risk Manager, Risk Champion, Risk Owner, CRO, Consultant CRO.
+//   - Edit: Risk Champion is restricted to their OWN submissions (checked
+//     against assessed_by, not department — see the PATCH /api/risks/:id
+//     handler below). Risk Manager/Owner are department-scoped via
+//     managerScopeClause()/managerCanAccess(). CRO/Consultant CRO/Admin
+//     have full access.
+//   - Approval workflow: Risk Champion submission -> Risk Owner first-line
+//     approval -> Risk Manager -> CRO (where applicable). Admin/Super
+//     Admin/CRO-created risks auto-approve.
+//   - Versioning: edits currently overwrite the risk in place; the
+//     version number only increments on Close/Reopen (a deliberate
+//     G10-style simplification — see docs/SCOPE_NOTES.md).
+//
 // GET /api/departments/without-manager
 // Returns the names of departments that have NO active Manager assigned.
 // Used by the CRO Risk Register view to decide which risks the CRO should approve
@@ -3655,6 +3743,14 @@ app.delete(
 );
 
 
+// ============================================================
+// Control Library (B2) — /api/controls/*
+// ============================================================
+// Standalone control catalogue, linked to risks many-to-many via
+// risk_controls. Create/edit: Admin, Risk Manager, Risk Champion, CRO.
+// Recording a test result (/:id/test) is narrower: Admin, Risk Manager,
+// CRO, Consultant CRO only — Risk Champion/Owner can view test history
+// but not record a new test.
 app.get(
     '/api/controls',
     requireRole('Admin', 'Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO', 'Viewer'),
@@ -4067,8 +4163,13 @@ app.get(
 );
 
 // ============================================================
-// Key Risk Indicators (B3)
+// Key Risk Indicators (B3) — /api/kris/*, /api/kri-register
 // ============================================================
+// Library (definitions + thresholds) vs. Register (actual readings over
+// time) is the same distinction as elsewhere: view is broad (incl.
+// Viewer), but defining a KRI or recording a measurement is Admin, Risk
+// Manager, CRO, Consultant CRO only. A Red reading auto-creates a linked
+// Issue (see Issues & Actions Tracker below).
 
 app.get(
     '/api/kris/next-id',
@@ -4419,6 +4520,17 @@ app.post(
 );
 
 
+// ============================================================
+// Users & Access (H2) — /api/users/*
+// ============================================================
+// Admin-only throughout. This is the one part of the permission model
+// that is already fully self-service today — an Admin can add a user,
+// assign any of the roles in UserManagement.jsx's ROLES array, scope
+// them to department(s)/business unit(s), deactivate, or remove them,
+// entirely through the UI. What is NOT self-service is the set of roles
+// itself, or what each role can do — see
+// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx for the scoped
+// design that would make that configurable too.
 app.get(
     '/api/users',
     requireRole('Admin'),
@@ -4991,8 +5103,12 @@ app.patch(
 );
 
 // ============================================================
-// Policy & Procedure Repository (A1)
+// Policy & Procedure Repository (A1) — /api/policies/*
 // ============================================================
+// Lifecycle: Draft -> Under Review -> Approved -> Published -> Archived,
+// gated per-transition by POLICY_TRANSITIONS below (not a flat role list).
+// Confidential policies have a separate Admin-only access list
+// (/:id/access) layered on top of the normal view permission.
 
 const POLICY_TRANSITIONS = {
     Draft: { 'Under Review': ['Admin', 'Risk Manager', 'Risk Owner'] },
@@ -5840,7 +5956,12 @@ app.get(
 app.get(
     '/api/audit-log',
     requireRole('Admin', 'Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO'),
-    // RBAC-02: Viewer excluded — audit log contains company-wide change history
+    // RBAC-02: Viewer excluded — audit log contains company-wide change history.
+    // This backend decision IS intentional, but Layout.jsx's NAV_ITEMS still
+    // shows the Audit Log sidebar link to Viewer regardless — so a Viewer
+    // sees a working-looking link that 403s when clicked. The frontend nav
+    // item is the actual bug here, not this role list. See
+    // Documents/Internal/RBAC_Permissions_Engine_Scoping.docx Finding 2.
     asyncHandler(async (req, res) => {
         const { entity_type, entity_id } = req.query;
         const conditions = ['company_id = $1'];
@@ -5895,8 +6016,13 @@ app.get(
 );
 
 // ============================================================
-// Issues & Actions Tracker (D)
+// Issues & Actions Tracker (D) — /api/issues/*
 // ============================================================
+// Separation-of-duties is enforced here by identity comparison
+// (created_by vs the acting user), independent of role — a business
+// rule, not a permission check, and deliberately NOT something the RBAC
+// engine scoping in Documents/Internal/RBAC_Permissions_Engine_Scoping.docx
+// would change (see that doc's section 5.2).
 
 const OPEN_ISSUE_STATUSES = ['Open', 'In Progress'];
 
@@ -8473,6 +8599,19 @@ async function recalcAppetiteCategoryBreaches(companyId, categoryFilter = null) 
     }
 }
 
+// ============================================================
+// Risk Appetite — /api/risk-appetite/*
+// ============================================================
+// Category-level appetite statements (tolerance + approver), distinct
+// from the per-risk appetite threshold on individual risks in the Risk
+// Register. Manage (create/edit/history): Admin, CRO, Consultant CRO.
+//
+// NOTE: the view role list below includes 'Approver', a role name that
+// does not exist in UserManagement.jsx's assignable ROLES array — it can
+// only be set directly in the database, never through the product's own
+// UI. Confirmed still present as of 2026-07-21; see
+// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx Finding 4.
+
 // GET /api/risk-appetite — all current statements for the company, enriched with breach counts
 app.get(
     '/api/risk-appetite',
@@ -8766,6 +8905,11 @@ app.delete(
 
 // ─── Scoring Methodology (A5) ────────────────────────────────────────────────
 // Stores company-customised Likelihood/Impact descriptions in company_settings.
+// NOTE: POST (edit) is CRO/Consultant CRO only — Admin is deliberately(?)
+// excluded here, unlike almost every other module. Confirmed still true as
+// of 2026-07-21; flagged as a likely-unintentional gap, not documented
+// policy — see Documents/Internal/RBAC_Permissions_Engine_Scoping.docx
+// Finding 5 and docs/SCOPE_NOTES.md section 14.
 
 app.get('/api/scoring-methodology', requireRole('Admin', 'Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO', 'Viewer'), asyncHandler(async (req, res) => {
     const r = await pool.query(
@@ -9432,8 +9576,16 @@ app.get('/api/consolidated-summary', requirePasswordCurrent, requireCompany,
 );
 
 // ============================================================
-// Incident Log Module
+// Incident Log Module — /api/incidents/*
 // ============================================================
+// NOTE: INCIDENT_WRITE_ROLES deliberately excludes Admin — Admin can view
+// incidents but not log/edit one, unlike almost every other module where
+// Admin has full access. Confirmed still true as of 2026-07-21; this is
+// the exact gap that blocked capturing an Admin/Super-Admin screenshot of
+// the "Log New Incident" form for the Risk Champion User Manual (see
+// CLAUDE.md "Documentation — pending items"). Flagged as a likely-
+// unintentional gap in Documents/Internal/RBAC_Permissions_Engine_Scoping.docx
+// Finding 5, not documented policy.
 
 const INCIDENT_ROLES = ['Admin', 'Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO', 'Viewer'];
 const INCIDENT_WRITE_ROLES = ['Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO'];
@@ -10355,6 +10507,10 @@ app.get('/api/forms/accepted-risks', requireRole(...FORMS_ROLES), asyncHandler(a
 // ─────────────────────────────────────────────────────────────────────────────
 // RISK GOVERNANCE DOCUMENTS
 // Access: CRO, Consultant CRO, Risk Manager, Admin, Super Admin
+// Files are stored embedded in Postgres (schema v72), not Google Cloud
+// Storage — migrated off GCS specifically to remove an external storage
+// dependency ahead of a possible on-premises handover (see
+// docs/SCOPE_NOTES.md section 14).
 // ─────────────────────────────────────────────────────────────────────────────
 
 const RGD_ROLES = ['Admin', 'Super Admin', 'CRO', 'Consultant CRO', 'Risk Manager'];

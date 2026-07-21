@@ -386,3 +386,98 @@ for the next build cycle:
    well-written policy document), high audit value.
 8. **H3 compliance calendar / H4 glossary** -- UX polish items, good
    candidates once the above functional gaps are closed.
+
+---
+
+## 14. Qatar Post Addendum (logged 2026-07-21)
+
+This codebase was forked from the generic platform above on 2026-06-28 to
+become Qatar Post's "ERM Workstation." Everything in sections 1-13 above
+is the original platform's decision log, frozen at that fork point. This
+section is the running log of what's happened since, kept in the same
+file rather than a new one so there's one place to read the full history.
+`docs/ARCHITECTURE.md`, `docs/FEATURES.md`, `docs/API_REFERENCE.md`, and
+`README.md` were all rewritten on 2026-07-21 to reflect the state
+described here; this section is the "why."
+
+**Product rename.** The instance was renamed from "GRC Workstation" to
+"ERM Workstation" throughout the UI, backend, `package.json`, and deploy
+scripts (v2.42.28-29). The underlying platform is still Certitude's GRC
+platform by origin -- only Qatar Post's branded instance uses the ERM
+name.
+
+**Modules removed.** Business Continuity Management (BCM/BCP,
+`schema_v73_remove_bcm_module.sql`) and Maturity Assessment
+(`schema_v74_remove_maturity_assessment.sql`) were removed entirely except
+for the critical-risk fields BCM left behind on `risks`. The Training
+Video Library was removed at the application layer (no schema change
+needed). All three were judged not relevant to Qatar Post's scope.
+
+**Modules added since the fork.** Incident Log, Risk Appetite (category-
+level statements), Horizon Scanning (with AI-assisted drafting), Risk
+Governance Documents (stored embedded in Postgres, migrated off GCS in
+schema v72 specifically to remove an external storage dependency ahead of
+a possible on-premises handover), Evidence attachments, PowerPoint export
+for the Risk Management Pack and Accepted Risk Report, and a full
+bilingual (English/Arabic) UI for structured fields, navigation, and
+in-app Help.
+
+**Arabic language scope -- free text stays English (deliberate).**
+Qatar Post's RFP asks for the ability to enter Risk Register details in
+Arabic. Structured/enum-driven fields are fully bilingual. Free-text
+fields (risk description, root cause, mitigation plan, comments) are
+English-only by decision, not by technical limitation -- Postgres is
+UTF-8 and stores Arabic text in the same columns with zero schema
+changes. The actual constraint is cross-role workflow (a Risk Champion's
+Arabic write-up wouldn't be actionable by an English-reading Risk
+Manager) and, internally, Certitude's own delivery team's ability to
+validate Arabic content for support purposes. If this needs to change
+later, the AI Integration hook already used for Horizon Scanning drafts
+is the natural extension point for a machine-translation aid --
+not built; scoped as a future option only.
+
+**Role model today, and a pending change.** The app has eight roles:
+Super Admin, Admin, Risk Champion, Risk Owner, Risk Manager, CRO,
+Consultant CRO, Viewer -- see `docs/ARCHITECTURE.md` section 2. **Super
+Admin and Consultant CRO are planned for deletion from the app prior to
+Qatar Post handover** (agreed 2026-07-21) -- neither fits Qatar Post's own
+operating model once Certitude's consulting/delivery involvement ends.
+This has **not been implemented yet**. When it is, every place these two
+roles are named in `server.js` (`requireRole()` lists, the Admin/Super-
+Admin bypass, the CRO/Consultant-CRO auto-expand rule), `App.jsx`,
+`Layout.jsx`, and this documentation set will need a follow-up pass.
+Tracked in the parent project's `CLAUDE.md` and the documentation tracker
+spreadsheet.
+
+**Known inconsistencies found during a full RBAC audit (2026-07-21).**
+A code-verified audit of every role-based check in the app (backend routes,
+frontend page/nav/component gates) surfaced several places where different
+parts of the app already disagree with each other -- these predate this
+addendum and are not caused by anything above:
+- Viewer is shown the Audit Log nav link but the backend 403s the request.
+- Risk Owner is shown a working global search box but the backend 403s it.
+- The Risk Appetite view route's role list includes a role literally named
+  `Approver`, which doesn't exist in the assignable role list -- almost
+  certainly a leftover from an earlier design iteration.
+- Admin is excluded from editing Scoring Methodology (CRO/Consultant CRO
+  only) and from logging a new Incident (`IncidentLog.jsx`'s `WRITE_ROLES`)
+  -- both look like narrow, likely unintentional gaps rather than policy.
+- `test-routing-audit.js`, a test script meant to catch exactly this kind
+  of drift, has itself drifted -- it's missing eight nav items that exist
+  in the real sidebar and disagrees with the real routing logic on several
+  pages it does cover.
+
+The full audit, with exact file/line references and a proposed
+admin-configurable permissions engine to fix the root cause (permissions
+hardcoded in ~20 files instead of living in one database table), is at
+`Documents/Internal/RBAC_Permissions_Engine_Scoping.docx` (Certitude
+internal -- scoping only, nothing built or deployed as of this writing).
+
+**Documentation itself was stale until this pass.** `README.md` and all of
+`docs/` carried the same 2026-06-28 timestamp as the fork, describing the
+original 3-role, ~3,600-line-`server.js` product, until the 2026-07-21
+rewrite this section is part of. See
+`Documents/Qatar_Post_Documentation_Handover_Tracker.xlsx` for the
+consolidated, living checklist of every documentation artifact's status
+going forward -- that spreadsheet, not this file, is now the place to
+check what still needs updating.

@@ -1,49 +1,89 @@
-# GRC Workstation — Beta V1.0 (Certitude Advisory Services)
+# ERM Workstation (Qatar Post) — v2.42.29 (Certitude Advisory Services)
 
-A multi-tenant, role-based, audit-logged GRC platform covering Policies,
-Controls, KRIs, Compliance Obligations, Issues & Actions, dashboards, bulk
-import/export, notifications, and per-client branding. This is the Beta
-V1.0 build -- all 10 phases of the Tier 1 roadmap are complete (see
-"Project status" below). If you're picking this codebase up cold, read
-this first.
+A multi-tenant, role-based, audit-logged Enterprise Risk Management platform
+covering the Risk Register, Control Library, KRIs, Policy Repository,
+Compliance Obligations, Issues & Actions, Incident Log, Risk Appetite,
+Horizon Scanning, Risk Governance Documents, dashboards, bulk import/export,
+notifications, bilingual (English/Arabic) UI, and per-client branding.
 
-## What's new in v2
+This is Qatar Post's own isolated fork of Certitude's GRC platform,
+rebranded "ERM Workstation." If you're picking this codebase up cold, read
+this first, then `docs/ARCHITECTURE.md` and `docs/API_REFERENCE.md`.
 
-**Multi-tenancy (G1)**
-- Every record now belongs to a `company` (tenant). A single login can have
-  access to multiple companies (e.g. a Group CFO overseeing several
-  subsidiaries) via the `user_companies` table, each with its own role.
-- `companies.parent_company_id` supports group/subsidiary structures for
-  future consolidated dashboards.
+> **Documentation status note (2026-07-21):** this file and the rest of
+> `docs/` were rewritten on this date to reflect the app as it actually
+> stands today. They had previously gone untouched since 2026-06-28, the
+> moment this codebase was forked from Certitude's generic platform, and
+> described a much earlier, simpler version of the product (3 roles, a
+> ~3,600-line `server.js`, no Qatar Post-specific modules). See
+> `Documents/Qatar_Post_Documentation_Handover_Tracker.xlsx` (in the parent
+> project folder) for the living checklist this rewrite was tracked against.
 
-**Authentication & sessions (G8)**
-- Login is now email + password (not username). Sessions are server-side
-  (`sessions` table, opaque token) rather than stateless JWT, so we can
-  enforce a **10-minute sliding inactivity timeout** and revoke sessions
-  immediately on lockout or logout.
-- Password policy: 10+ chars, upper/lower/number/special character, no
-  reuse of the last 5 passwords, 90-day forced rotation (all configurable
-  via env vars).
-- Account lockout after 5 failed attempts (configurable lockout duration);
-  lockout immediately invalidates existing sessions.
+## Roles today — and a pending change
 
-**RBAC (Section E)**
-- Three roles per company: **Admin** (full access), **Manager** (own
-  department's risks, can't self-approve), **Viewer** (no risk register
-  access in Tier 1 — published policies only, in a later phase).
-- `is_super_admin` is for the consulting firm's own staff: implicit Admin
-  access to every company in the instance.
+The app currently has **eight roles**: Super Admin, Admin, Risk Champion,
+Risk Owner, Risk Manager, CRO, Consultant CRO, and Viewer (see
+`docs/ARCHITECTURE.md` section 2 for what each can do).
 
-**Audit log (G10)**
-- Generic, append-only `audit_log` table. Every module logs into this
-  rather than rolling its own history mechanism. Corrections are made via
-  new entries, never overwrites.
+**Planned change, not yet made:** Qatar Post and Certitude have agreed that
+**Super Admin and Consultant CRO will be deleted and removed from the app
+before handover.** Neither role is needed in Qatar Post's own operating
+model — Super Admin exists for Certitude's own consulting staff, and
+Consultant CRO supports the multi-client consultant benchmarking layer,
+neither of which applies once Qatar Post is operating the instance
+independently. This has **not been implemented yet** — the code, this
+documentation, and the six user manuals all still describe the current
+8-role reality. Once the roles are actually removed, this file, the
+manuals for those two roles (if any exist), and every place both roles are
+named throughout `docs/` will need a follow-up pass. Tracked in the
+parent project's `CLAUDE.md` and in the documentation tracker spreadsheet.
 
-**Frontend**
-- The old hand-built `build-ui.js` (string-templated HTML) has been
-  replaced with a proper React app (`frontend/`, Vite-based), which builds
-  into `public/` and is served by Express. This is the foundation the
-  remaining module UIs (Policies, Controls, KRIs, etc.) will be added to.
+## What the platform does
+
+- **Risk Register** — inherent/residual scoring, department-scoped
+  submission and approval workflow, mitigation action plans, close/reopen
+  with versioning.
+- **Control Library** — control testing, test history, linking to risks.
+- **KRI Library & Register** — threshold-based key risk indicators with
+  measurement history.
+- **Policy Repository** — versioned policies, attestation tracking,
+  confidential access lists.
+- **Compliance Obligations** — regulatory obligation register with status
+  history.
+- **Issues & Actions** — issue tracking with action items and
+  separation-of-duties enforcement.
+- **Incident Log** — operational incident capture, linking to risks.
+- **Risk Appetite** — statements and thresholds by category.
+- **Horizon Scanning** — emerging-risk capture, with an AI-assisted draft
+  option.
+- **Risk Governance Documents** — charters/terms of reference, stored in
+  Postgres (no external object storage dependency).
+- **Org Roles (RACI)**, **Compliance Calendar**, **Glossary**, **Audit
+  Log**, **Access Matrix** (static reference), **Escalation Rules**,
+  **Evidence attachments**, **Data import/export/search**.
+- **Reporting** — Management Summary dashboard, PDF and PowerPoint export
+  (Risk Management Pack, Accepted Risk Report).
+- **Bilingual UI** — English/Arabic toggle for all structured fields, nav,
+  and Help content; free-text fields remain English-only by deliberate
+  decision (see `docs/SCOPE_NOTES.md`).
+
+**Removed since the original build** (see `docs/SCOPE_NOTES.md` for why):
+Business Continuity Management (BCM/BCP), Maturity Assessment, and the
+Training Video Library.
+
+## Tech stack
+
+- **Backend**: Node.js + Express (`server.js`, ~10,600 lines), `pg` for
+  PostgreSQL, `bcryptjs` for password hashing, `docx`/`pptxgenjs`-style
+  export helpers for reports.
+- **Database**: PostgreSQL 15. Schema is split into 74 versioned files
+  (`schema_v2.sql` ... `schema_v74_remove_maturity_assessment.sql`), each
+  idempotent, applied by `migrate-all.js` for fresh installs.
+- **Frontend**: React + Vite, built to static files served by Express from
+  `/public`. Client-side routing is a `page` string in `App.jsx`, not a
+  router library.
+- **Sessions**: server-side session tokens (`sessions` table), with a
+  sliding inactivity timeout.
 
 ## Local setup (fresh install)
 
@@ -54,8 +94,8 @@ npm install
 # 2. Start Postgres (your own instance, or via docker compose)
 docker compose up -d db
 
-# 3. Apply the v2 schema (skip if using docker compose -- it auto-applies on first boot)
-psql "$DATABASE_URL" -f schema_v2.sql
+# 3. Apply the full schema (skip if using docker compose -- it auto-applies)
+node migrate-all.js
 
 # 4. Build the frontend
 npm run build:frontend
@@ -67,32 +107,9 @@ cp .env.example .env   # fill in DATABASE_URL, etc.
 npm start
 ```
 
-You'll need to seed at least one company and one super-admin user directly
-in the database for a brand-new instance (see `schema_v2.sql` for table
-shapes) — a setup/seed script is a good Phase 1 addition.
-
-## Upgrading an existing v1 database
-
-If you have an existing v1 (single-tenant, username/password) database:
-
-```bash
-DATABASE_URL=postgresql://... \
-COMPANY_NAME="Your Client Name" \
-COMPANY_CODE="ABC" \
-npm run migrate:v2
-```
-
-This is idempotent and safe to re-run. It:
-- Creates a default company to hold all existing data
-- Renames `users` → `users_v1_legacy` (preserved, not deleted) and creates
-  the new email-based `users` + `user_companies` tables
-- Migrates each user (deriving an email if their username wasn't one),
-  mapping old roles into the new Admin/Manager model
-- Adds `company_id` to `risk_categories`, `matrix_settings`, and `risks`
-
-**All migrated users get `must_change_password = true`** — their old
-password still works for one login, after which they must set a new one
-meeting the policy above.
+Bootstrap the first company and Admin user with
+`ADMIN_EMAIL=you@example.com bash deploy/migrate-qpost-prod.sh bootstrap`
+(or the equivalent non-Qatar-Post script) rather than seeding by hand.
 
 ## Running everything with Docker Compose
 
@@ -100,40 +117,46 @@ meeting the policy above.
 docker compose up --build
 ```
 
-This starts Postgres (with `schema_v2.sql` through `schema_v8_additions.sql`
-auto-applied in order on first boot, fresh installs only) and the app
-(which builds the React frontend as part of its image build).
+Starts Postgres (full schema auto-applied on first boot, fresh installs
+only) and the app (which builds the React frontend as part of its image
+build). The same Docker image is what would be handed to Qatar Post for
+an on-premises deployment, per `docs/SCOPE_NOTES.md` Phase 3 notes.
 
 ## Health check
 
-`GET /healthz` returns `{"status":"ok"}` if the app is up and can reach
-the database (used by Cloud Run / load balancers in Phase 8 deployments).
+`GET /healthz` returns `{"status":"ok"}` if the app is up and can reach the
+database (used by Cloud Run / load balancers).
 
 ## Environment variables
 
-See `.env.example`:
-- `DATABASE_URL` — Postgres connection string
-- `SESSION_TIMEOUT_MINUTES` (default 10) — G8 idle timeout
-- `LOCKOUT_MINUTES` (default 30) — G8 lockout duration
-- `PASSWORD_MAX_AGE_DAYS` (default 90) — G8 forced rotation period
+See `.env.example`. Notable ones beyond the standard `DATABASE_URL`,
+session-timeout, and lockout settings:
+- `DEMO_MODE` — set to `risk-only` to show only the Risk module (used for
+  Qatar Post's pre-award demo); unset to unlock all modules.
+- `DISABLE_MFA` — set to `true` to skip MFA (used during Qatar Post UAT);
+  should be removed once Qatar Post goes live.
 
 ## Documentation
 
-- `docs/ARCHITECTURE.md` -- architecture overview, multi-tenancy/auth
-  model, ER diagram, and a module map from spec section to code (G11).
-- `docs/API_REFERENCE.md` -- endpoint catalog grouped by module (G11).
-- `docs/USER_GUIDE.md` -- onboarding and training for client staff,
-  covering control tests, KRI breaches, issues, policy attestation, and
-  admin workflows, plus a glossary (G12).
-- `deploy/README.md` -- Cloud Run + Cloud SQL deployment guide (Phase 8).
-- `docs/SCOPE_NOTES.md` -- consolidated list of deferred items and known
-  limitations across all phases; the starting point for any Tier 2 work.
+- `docs/ARCHITECTURE.md` — architecture overview, role model, ER diagram,
+  and a module map from feature to code.
+- `docs/API_REFERENCE.md` — endpoint catalog grouped by module, with the
+  role required for each.
+- `docs/FEATURES.md` — plain-language feature overview, module by module.
+- `docs/USER_GUIDE.md` — a lightweight, all-roles overview. For detailed,
+  screenshot-based instructions, see the role-specific User Manuals in the
+  parent project's `Documents/` folder (Risk Champion today; Admin, CRO,
+  and Risk Manager manuals are planned — see the documentation tracker).
+- `deploy/README.md` — deployment guide, including the Qatar Post-specific
+  scripts in `deploy/`.
+- `docs/SCOPE_NOTES.md` — consolidated list of deferred items, known
+  limitations, and decisions made across the life of this codebase.
 
-## Project status
+## Project status (as of 2026-07-21)
 
-**All 10 phases of the Tier 1 build are complete**: multi-tenant
-foundation, the full risk/control/KRI module, Policy Repository + RACI,
-Compliance Obligations, Issues & Actions Tracker, refined access control,
-dashboards, bulk import/export/search/notifications, cloud deployment, and
-per-client branding + documentation/training. See `docs/SCOPE_NOTES.md`
-for what's deliberately deferred to Tier 2 and suggested next steps.
+Qatar Post's instance is in Phase 2 (isolated GCP project, full
+infrastructure, demo mode active, MFA disabled) — see the parent project's
+`CLAUDE.md` for full deployment-phase tracking. This codebase itself has
+had continuous feature work since the original Tier-1 build; `docs/
+SCOPE_NOTES.md`'s Qatar Post addendum section is the running log of what's
+changed and why.

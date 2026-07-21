@@ -1,3 +1,10 @@
+// PolicyRepository.jsx — Policy & Procedure Repository (A1) page.
+// `canManage` (below) is Admin and Risk Manager ONLY — narrower than most
+// other modules (no Risk Champion/CRO). Lifecycle transitions
+// (Draft/Review/Approve/Publish/Archive) have their own per-transition
+// role gates server-side (POLICY_TRANSITIONS in server.js), not fully
+// captured by this single flag. See
+// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx section 3.6.
 import { useEffect, useState } from 'react';
 import { useAuth } from '../AuthContext';
 import { useT } from '../contexts/LanguageContext';

@@ -10,6 +10,11 @@
  *   POST   /api/evidence/:entityType/:entityId  → {id, filename, …}   body: {filename, mime_type, file_data (base64), file_size_bytes}
  *   GET    /api/evidence/download/:id           → file download (Content-Disposition: attachment)
  *   DELETE /api/evidence/:id                    → {}
+ *
+ * Role gating: `canWrite`/`canDelete` (below) — write is Admin, Risk
+ * Manager, Risk Champion, Risk Owner, CRO (+ Consultant CRO via the
+ * backend's CRO auto-expand rule); delete is Admin only. See
+ * Documents/Internal/RBAC_Permissions_Engine_Scoping.docx section 3.6.
  */
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../AuthContext';

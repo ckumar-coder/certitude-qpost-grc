@@ -1,3 +1,9 @@
+// HorizonScanning.jsx — Horizon Scanning page. `canEdit` (below) covers
+// create/edit/convert (Admin, CRO, Consultant CRO, Risk Manager); delete
+// and the AI-draft action are narrower still (Admin, CRO, Consultant CRO
+// only — Risk Manager excluded from just those two, per
+// docs/API_REFERENCE.md "Horizon Scanning"). See
+// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx section 3.6.
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../AuthContext';
 import { useT } from '../contexts/LanguageContext';

@@ -1,3 +1,8 @@
+// OrgRoles.jsx — Org Roles (RACI) page. `canManageRaci` gates RACI matrix
+// edits (Admin, CRO, Consultant CRO); `canManageDir` gates the underlying
+// Role -> Person -> Department directory and additionally admits Risk
+// Manager. Viewing is broad (incl. Viewer). See
+// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx section 3.6.
 import { useEffect, useState } from 'react';
 import { useAuth } from '../AuthContext';
 import { useT } from '../contexts/LanguageContext';

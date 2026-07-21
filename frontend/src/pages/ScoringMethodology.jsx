@@ -1,3 +1,8 @@
+// ScoringMethodology.jsx — Scoring Methodology page. `canManage` (below)
+// is CRO/Consultant CRO ONLY — Admin is deliberately(?) excluded, unlike
+// almost every other module. Confirmed still true as of 2026-07-21;
+// flagged as a likely-unintentional gap, not documented policy — see
+// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx Finding 5.
 import { useEffect, useState } from 'react';
 import { useAuth } from '../AuthContext';
 import { useT } from '../contexts/LanguageContext';

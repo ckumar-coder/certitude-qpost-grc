@@ -1,3 +1,9 @@
+// RiskAppetite.jsx — Risk Appetite page (category-level statements).
+// `canEdit` (below) is Admin/CRO/Consultant CRO. Note the backend's view
+// role list also includes a role literally named 'Approver' that isn't
+// in the assignable roles list (UserManagement.jsx) — see
+// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx Finding 4 and
+// section 3.6.
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../AuthContext';
 import { useT } from '../contexts/LanguageContext';

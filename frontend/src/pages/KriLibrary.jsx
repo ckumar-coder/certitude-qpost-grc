@@ -1,3 +1,8 @@
+// KriLibrary.jsx — KRI Library & Register (B3) page. `canManageKri`
+// (below) gates defining a KRI and recording measurements: Admin, Risk
+// Manager, CRO, Consultant CRO. Viewing (incl. Risk Champion/Owner/
+// Viewer) is broader. See
+// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx section 3.6.
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../AuthContext';
 import DepartmentField from '../components/DepartmentField';

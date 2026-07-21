@@ -3,6 +3,10 @@ import { useAuth } from '../AuthContext';
 import CascadingDeptSelector from './CascadingDeptSelector';
 
 // Dept field for use inside entity create/edit forms.
+// This is a UX auto-fill/lock behavior derived from role + scope, not a
+// permission gate in itself — see
+// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx section 3.3 for
+// why this is treated as a distinct category from simple show/hide gates.
 //
 // Managers: locked to their own dept(s) or BU(s) (read-only).
 // Admins/CROs: get a full cascading picker (BU→Dept in BU Mode, or grouped

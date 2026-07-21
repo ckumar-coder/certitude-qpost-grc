@@ -1,3 +1,21 @@
+// RiskRegister.jsx — Risk Register (B1) page, the largest and most
+// role-sensitive component in the app. Local capability flags include:
+//   - isSuperAdmin / isCro — used together throughout (Super Admin mirrors
+//     CRO approval power); both are planned for removal/consolidation once
+//     Super Admin and Consultant CRO are deleted from the app (not yet
+//     done — see CLAUDE.md "Engineering — pending items").
+//   - croCanApprove() — CRO/Consultant CRO/Super Admin final approval gate.
+//   - canManageLifecycle — Close/Reopen: Risk Manager, CRO, Consultant CRO,
+//     Super Admin.
+//   - canEditMaps — mitigation action plan edits: everyone except Admin
+//     and Viewer.
+//   - submitterRefs / isLocked (department field) — a UX default/lock
+//     derived from the submitter's role and department scope, not a
+//     permission gate; see server.js's Risk Register section header for
+//     the actual edit-scope rules (own-submission for Risk Champion,
+//     department for Risk Manager/Owner, full for CRO/Admin).
+// Full detail: Documents/Internal/RBAC_Permissions_Engine_Scoping.docx
+// section 3.6.
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../AuthContext';
 import scoreBadge from '../components/scoreBadge';
