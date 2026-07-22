@@ -5309,7 +5309,7 @@ app.put(
 
 app.get(
     '/api/org-roles',
-    requireRole('Admin', 'Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO', 'Viewer'),
+    can('org_roles.view'), // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO', 'Viewer')
     asyncHandler(async (req, res) => {
         const result = await pool.query(`
             SELECT
@@ -5346,7 +5346,7 @@ app.get(
 
 app.post(
     '/api/org-roles',
-    requireRole('Admin', 'Risk Manager', 'CRO', 'Consultant CRO'),
+    can('org_roles.manage'), // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'CRO', 'Consultant CRO')
     asyncHandler(async (req, res) => {
         if (!req.body.role_title || !req.body.person_name) {
             return res.status(400).json({ error: 'role_title and person_name are required' });
@@ -5361,7 +5361,7 @@ app.post(
 
 app.patch(
     '/api/org-roles/:id',
-    requireRole('Admin', 'Risk Manager', 'CRO', 'Consultant CRO'),
+    can('org_roles.manage'), // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'CRO', 'Consultant CRO')
     asyncHandler(async (req, res) => {
         const fields = ['role_title', 'person_name', 'department', 'email'];
         const updates = [];
@@ -5386,7 +5386,7 @@ app.patch(
 
 app.delete(
     '/api/org-roles/:id',
-    requireRole('Admin', 'Risk Manager', 'CRO', 'Consultant CRO'),
+    can('org_roles.manage'), // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'CRO', 'Consultant CRO')
     asyncHandler(async (req, res) => {
         await pool.query('DELETE FROM org_roles WHERE id = $1 AND company_id = $2', [req.params.id, req.company.id]);
         res.json({ message: 'Deleted' });
@@ -5443,7 +5443,7 @@ async function seedRaciForCompany(client, companyId) {
 
 app.get(
     '/api/raci-matrix',
-    requireRole('Admin', 'Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO', 'Viewer'),
+    can('raci.view'), // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO', 'Viewer')
     asyncHandler(async (req, res) => {
         let result = await pool.query(
             'SELECT * FROM raci_matrix WHERE company_id = $1 ORDER BY sort_order',
@@ -5475,7 +5475,7 @@ const RACI_ROLE_COLS = ['admin', 'cro', 'consultant_cro', 'manager', 'approver',
 
 app.patch(
     '/api/raci-matrix/:id',
-    requireRole('Admin', 'CRO', 'Consultant CRO'),
+    can('raci.edit'), // Phase C cutover -- was requireRole('Admin', 'CRO', 'Consultant CRO')
     asyncHandler(async (req, res) => {
         const updates = [];
         const values = [];
@@ -9510,7 +9510,7 @@ app.get('/api/calendar', requireRole('Risk Manager', 'Risk Champion', 'Risk Owne
 // IMPORTANT: the /download/:id route MUST be registered before /:entityType/:entityId
 // so Express doesn't swallow "download" as the entityType parameter.
 
-app.get('/api/evidence/download/:id', requireRole('Admin', 'Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO', 'Viewer'), asyncHandler(async (req, res) => {
+app.get('/api/evidence/download/:id', can('evidence.view'), asyncHandler(async (req, res) => { // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO', 'Viewer')
     const r = await pool.query(
         `SELECT filename, mime_type, file_data FROM evidence_attachments WHERE id=$1 AND company_id=$2`,
         [req.params.id, req.company.id]
@@ -9523,7 +9523,7 @@ app.get('/api/evidence/download/:id', requireRole('Admin', 'Risk Manager', 'Risk
     res.send(buf);
 }));
 
-app.get('/api/evidence/:entityType/:entityId', requireRole('Admin', 'Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO', 'Viewer'), asyncHandler(async (req, res) => {
+app.get('/api/evidence/:entityType/:entityId', can('evidence.view'), asyncHandler(async (req, res) => { // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO', 'Viewer')
     const r = await pool.query(
         `SELECT id, filename, mime_type, file_size_bytes, uploaded_by, uploaded_at
          FROM evidence_attachments
@@ -9534,7 +9534,7 @@ app.get('/api/evidence/:entityType/:entityId', requireRole('Admin', 'Risk Manage
     res.json(r.rows);
 }));
 
-app.post('/api/evidence/:entityType/:entityId', requireRole('Admin', 'Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO'), validate(schemas.evidence), asyncHandler(async (req, res) => {
+app.post('/api/evidence/:entityType/:entityId', can('evidence.upload'), validate(schemas.evidence), asyncHandler(async (req, res) => { // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO')
     const { filename, mime_type, file_data } = req.body;
 
     const MAX_BYTES = 2 * 1024 * 1024; // 2MB per-file limit
@@ -9567,7 +9567,7 @@ app.post('/api/evidence/:entityType/:entityId', requireRole('Admin', 'Risk Manag
     res.status(201).json(r.rows[0]);
 }));
 
-app.delete('/api/evidence/:id', requireRole('Admin'), asyncHandler(async (req, res) => {
+app.delete('/api/evidence/:id', can('evidence.delete'), asyncHandler(async (req, res) => { // Phase C cutover -- was requireRole('Admin')
     const r = await pool.query(
         `DELETE FROM evidence_attachments WHERE id=$1 AND company_id=$2`,
         [req.params.id, req.company.id]
@@ -9578,7 +9578,7 @@ app.delete('/api/evidence/:id', requireRole('Admin'), asyncHandler(async (req, r
 
 // ── Storage & Health (Admin only) ─────────────────────────────────────────────
 
-app.get('/api/admin/storage-stats', requireRole('Admin'), asyncHandler(async (req, res) => {
+app.get('/api/admin/storage-stats', can('storage.manage'), asyncHandler(async (req, res) => { // Phase C cutover -- was requireRole('Admin')
     const companyId = req.company.id;
     const QUOTA_BYTES = 500 * 1024 * 1024;
 
@@ -9610,7 +9610,7 @@ app.get('/api/admin/storage-stats', requireRole('Admin'), asyncHandler(async (re
     });
 }));
 
-app.delete('/api/admin/evidence/bulk', requireRole('Admin'), asyncHandler(async (req, res) => {
+app.delete('/api/admin/evidence/bulk', can('evidence.bulk_manage'), asyncHandler(async (req, res) => { // Phase C cutover -- was requireRole('Admin')
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0)
         return res.status(400).json({ error: 'ids array required' });
