@@ -2522,7 +2522,7 @@ app.get(
 // Preview the next available risk ID for a given department code (no side effects).
 app.get(
     '/api/risks/next-id',
-    requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO'),
+    can('risk.create'), // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO'); resolved 2026-07-22 -- Chandrashekar confirmed Risk Owner should gain access here, matching POST /api/risks (create) and the risk.create seed
     asyncHandler(async (req, res) => {
         const deptParam = req.query.department || 'GEN';
         const client = await pool.connect();
@@ -2539,6 +2539,7 @@ app.get(
 
 app.get(
     '/api/risks',
+    can('risk.view'), // Phase C cutover -- was ungated (open to any authenticated session); risk.view is granted to all 8 roles (dept or full) in the seed, so this never actually blocks anyone -- makes the authorization explicit rather than accidental
     asyncHandler(async (req, res) => {
         const { role, department } = req.company;
 
@@ -2591,7 +2592,7 @@ app.get(
 // Accessible to Admin (oversight) and CRO (action).
 app.get(
     '/api/risks/pending-cro',
-    requireRole('Admin', 'CRO'),
+    can('risk.cro_accept'), // Phase C cutover -- was requireRole('Admin', 'CRO') (Consultant CRO already passed via the CRO auto-expand rule)
     asyncHandler(async (req, res) => {
         const result = await pool.query(
             `SELECT * FROM risks
@@ -2609,7 +2610,7 @@ app.get(
 // Records the CRO user, timestamp, optional notes, and sets status = 'accepted'.
 app.post(
     '/api/risks/:id/cro-accept',
-    requireRole('CRO', 'Consultant CRO'),
+    can('risk.cro_accept'), // Phase C cutover -- was requireRole('CRO', 'Consultant CRO')
     asyncHandler(async (req, res) => {
         const riskId = parseInt(req.params.id, 10);
         const notes = req.body.notes || null;
@@ -2651,7 +2652,7 @@ app.post(
 // Reverts cro_acceptance_status to null so the Approver can reconsider.
 app.post(
     '/api/risks/:id/cro-decline',
-    requireRole('CRO', 'Consultant CRO'),
+    can('risk.cro_decline'), // Phase C cutover -- was requireRole('CRO', 'Consultant CRO')
     asyncHandler(async (req, res) => {
         const riskId = parseInt(req.params.id, 10);
         const reason = req.body.reason || null;
@@ -2701,7 +2702,7 @@ app.post(
 // Risk stays in 'pending_cro'; the comment is appended to cro_notes.
 app.post(
     '/api/risks/:id/cro-comment',
-    requireRole('CRO', 'Consultant CRO'),
+    can('risk.cro_accept'), // Phase C cutover -- was requireRole('CRO', 'Consultant CRO'); no dedicated cro_comment capability was seeded, reusing risk.cro_accept since its role/scope shape is identical (Admin/Super Admin/CRO/Consultant CRO = full, everyone else none)
     asyncHandler(async (req, res) => {
         const riskId = parseInt(req.params.id, 10);
         const { comment } = req.body;
@@ -2744,7 +2745,7 @@ app.post(
 
 app.post(
     '/api/risks',
-    requireRole('Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO'),
+    can('risk.create'), // Phase C cutover -- was requireRole('Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO')
     validate(schemas.createRisk),
     asyncHandler(async (req, res) => {
         // Determine initial workflow status:
@@ -3053,7 +3054,7 @@ const VALID_MAP_STATUSES = ['Pending', 'In Progress', 'Complete', 'Deferred', 'C
 // POST /api/risks/:id/mitigations — add a MAP to an existing risk
 app.post(
     '/api/risks/:id/mitigations',
-    requireRole(...MAP_ROLES),
+    can('risk.mitigation.manage'), // Phase C cutover -- was requireRole(...MAP_ROLES)
     asyncHandler(async (req, res) => {
         const riskId = parseInt(req.params.id, 10);
         const riskRes = await pool.query(
@@ -3107,7 +3108,7 @@ app.post(
 // PUT /api/mitigations/:id — edit a MAP
 app.put(
     '/api/mitigations/:id',
-    requireRole(...MAP_ROLES),
+    can('risk.mitigation.manage'), // Phase C cutover -- was requireRole(...MAP_ROLES)
     asyncHandler(async (req, res) => {
         const mapId = parseInt(req.params.id, 10);
         // Verify the MAP belongs to this company
@@ -3182,7 +3183,7 @@ app.put(
 // DELETE /api/mitigations/:id — remove a MAP
 app.delete(
     '/api/mitigations/:id',
-    requireRole(...MAP_ROLES),
+    can('risk.mitigation.manage'), // Phase C cutover -- was requireRole(...MAP_ROLES)
     asyncHandler(async (req, res) => {
         const mapId = parseInt(req.params.id, 10);
         const mapRes = await pool.query(
@@ -3221,7 +3222,7 @@ app.delete(
 
 app.post(
     '/api/risks/:id/approve',
-    requireRole('Risk Manager', 'CRO', 'Consultant CRO'),
+    can('risk.approve_manager'), // Phase C cutover -- was requireRole('Risk Manager', 'CRO', 'Consultant CRO'); not scope-aware, so the Risk Manager department check below stays a role-literal check
     asyncHandler(async (req, res) => {
         const riskId = parseInt(req.params.id, 10);
 
@@ -3324,7 +3325,7 @@ async function cloneRiskAsNewVersion(client, latest, overrides, actorEmail) {
 // POST /api/risks/:id/approver-approve — Approver forwards risk to Manager queue.
 app.post(
     '/api/risks/:id/approver-approve',
-    requireRole('Risk Owner'),
+    can('risk.approve_first_line'), // Phase C cutover -- was requireRole('Risk Owner')
     asyncHandler(async (req, res) => {
         const riskId = parseInt(req.params.id, 10);
         const riskRes = await pool.query(
@@ -3363,7 +3364,7 @@ app.post(
 // POST /api/risks/:id/approver-reject — Approver sends risk back to Risk Champion (Draft).
 app.post(
     '/api/risks/:id/approver-reject',
-    requireRole('Risk Owner'),
+    can('risk.approve_first_line'), // Phase C cutover -- was requireRole('Risk Owner')
     asyncHandler(async (req, res) => {
         const riskId = parseInt(req.params.id, 10);
         const riskRes = await pool.query(
@@ -3402,7 +3403,7 @@ app.post(
 // POST /api/risks/:id/manager-reject — Manager/CRO sends risk back to Risk Champion (Draft).
 app.post(
     '/api/risks/:id/manager-reject',
-    requireRole('Risk Manager', 'Admin', 'CRO', 'Consultant CRO'),
+    can('risk.reject'), // Phase C cutover -- was requireRole('Risk Manager', 'Admin', 'CRO', 'Consultant CRO')
     asyncHandler(async (req, res) => {
         const riskId = parseInt(req.params.id, 10);
         const riskRes = await pool.query(
@@ -3439,7 +3440,7 @@ app.post(
 
 app.post(
     '/api/risks/:id/close',
-    requireRole('Risk Manager', 'CRO', 'Consultant CRO'),
+    can('risk.close'), // Phase C cutover -- was requireRole('Risk Manager', 'CRO', 'Consultant CRO')
     asyncHandler(async (req, res) => {
         if (!req.body.closure_reason || !req.body.closure_reason.trim()) {
             return res.status(400).json({ error: 'closure_reason is required' });
@@ -3497,7 +3498,7 @@ app.post(
 
 app.post(
     '/api/risks/:id/reopen',
-    requireRole('Risk Manager', 'CRO', 'Consultant CRO'),
+    can('risk.reopen'), // Phase C cutover -- was requireRole('Risk Manager', 'CRO', 'Consultant CRO')
     asyncHandler(async (req, res) => {
         if (!req.body.reopen_reason || !req.body.reopen_reason.trim()) {
             return res.status(400).json({ error: 'reopen_reason is required' });
@@ -3564,7 +3565,7 @@ app.post(
 // ── GET /api/risks/:id — Fetch a single risk (read-only) ────────────────────
 app.get(
     '/api/risks/:id',
-    requireRole('Admin', 'Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO', 'Viewer'),
+    can('risk.view'), // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO', 'Viewer') (i.e. all 8 roles)
     asyncHandler(async (req, res) => {
         const riskId = parseInt(req.params.id, 10);
         const result = await pool.query(
@@ -3578,12 +3579,16 @@ app.get(
 
 // ── PATCH /api/risks/:id — Edit a risk ──────────────────────────────────────
 //
-// Authority (from governance model v2):
-//   Risk Champion  → own submissions only  (assessed_by === req.user.email)
-//   Manager    → any risk in their dept(s)
-//   CRO        → any risk, company-wide
-//   Admin      → blocked (403)
-//   Viewer     → blocked (403)
+// Authority (risk.edit capability, driven by req.scope as of Phase C):
+//   Risk Champion         → own submissions only (assessed_by === req.user.email) -- scope 'own'
+//   Risk Manager/Risk Owner → any risk in their dept(s) -- scope 'dept'
+//   CRO/Consultant CRO/Admin/Super Admin → any risk, company-wide -- scope 'full'
+//   Viewer                → blocked (403, no risk.edit capability at all)
+// Note: the comment here previously said "Admin → blocked (403)", which never
+// actually matched runtime behaviour -- requireRole()'s hardcoded Admin/Super
+// Admin bypass always let them through regardless of the route's own role
+// list. risk.edit is seeded 'full' for Admin/Super Admin specifically to
+// preserve that real, pre-existing behaviour, not to change it.
 //
 // Status reset: if the risk's current approval_status is 'Approved', any edit
 // automatically resets it back to 'Awaiting Approval'.
@@ -3591,9 +3596,13 @@ app.get(
 // Treatment routing: if treatment_strategy changes to Accept or Avoid,
 // cro_acceptance_status is set to 'pending_cro'. If it changes away from
 // Accept/Avoid, cro_acceptance_status is cleared to null.
+// Resolved 2026-07-22 -- Chandrashekar confirmed Risk Owner should gain real
+// dept-scoped edit access here, matching the risk.edit seed and fixing the
+// dead code below that already anticipated it (see git history / CLAUDE.md
+// for the discrepancy this was flagged against before the decision).
 app.patch(
     '/api/risks/:id',
-    requireRole('Risk Champion', 'Risk Manager', 'CRO', 'Consultant CRO'),
+    can('risk.edit'), // Phase C cutover -- was requireRole('Risk Champion', 'Risk Manager', 'CRO', 'Consultant CRO')
     asyncHandler(async (req, res) => {
         const riskId = parseInt(req.params.id, 10);
         const role = req.company.role;
@@ -3606,17 +3615,24 @@ app.patch(
         if (riskRes.rows.length === 0) return res.status(404).json({ error: 'Risk not found' });
         const risk = riskRes.rows[0];
 
-        // 2. Enforce edit authority
-        if (role === 'Risk Champion') {
+        // 2. Enforce edit authority -- driven by req.scope (Phase C's
+        // can('risk.edit') result) rather than role literals. Previously this
+        // branched on `role === 'Risk Champion'` / `role === 'Risk Manager' ||
+        // role === 'Risk Owner'`; Risk Owner's branch was unreachable dead
+        // code because the outer requireRole() gate excluded Risk Owner
+        // entirely. Now that the gate is can('risk.edit') and risk.edit is
+        // seeded 'dept' for Risk Owner, this scope check is what actually
+        // grants that access (resolved 2026-07-22, see CLAUDE.md).
+        if (req.scope === 'own') {
             if (risk.assessed_by !== req.user.email) {
-                return res.status(403).json({ error: 'Risk Champions may only edit their own submissions.' });
+                return res.status(403).json({ error: 'You may only edit your own submissions.' });
             }
-        } else if (role === 'Risk Manager' || role === 'Risk Owner') {
+        } else if (req.scope === 'dept') {
             if (!await managerCanAccess(req, risk.department)) {
                 return res.status(403).json({ error: 'You may only edit risks in your own department(s).' });
             }
         }
-        // CRO: no restriction — falls through
+        // 'full' (CRO, Consultant CRO, Admin, Super Admin): no restriction — falls through
 
         // 3. Build update list from provided fields
         const EDITABLE_FIELDS = [
@@ -3752,7 +3768,7 @@ function sortedRiskUidPair(a, b) {
 
 app.get(
     '/api/risks/:uid/related',
-    requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO'),
+    can('risk.link_related'), // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO')
     asyncHandler(async (req, res) => {
         const uid = req.params.uid;
         const linksRes = await pool.query(
@@ -3793,7 +3809,7 @@ app.get(
 
 app.post(
     '/api/risks/:uid/related',
-    requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO'),
+    can('risk.link_related'), // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO')
     asyncHandler(async (req, res) => {
         const uid = req.params.uid;
         const otherUid = (req.body.related_risk_uid || '').trim();
@@ -3830,7 +3846,7 @@ app.post(
 
 app.delete(
     '/api/risks/:uid/related/:otherUid',
-    requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO'),
+    can('risk.link_related'), // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO')
     asyncHandler(async (req, res) => {
         const [a, b] = sortedRiskUidPair(req.params.uid, req.params.otherUid);
         await pool.query('DELETE FROM risk_links WHERE company_id = $1 AND risk_uid_a = $2 AND risk_uid_b = $3', [req.company.id, a, b]);
@@ -3849,7 +3865,7 @@ app.delete(
 // but not record a new test.
 app.get(
     '/api/controls',
-    requireRole('Admin', 'Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO', 'Viewer'),
+    can('control.view'), // Phase C cutover -- was requireRole(all 8 roles)
     asyncHandler(async (req, res) => {
         const scope = managerScopeClause(req, 'department', 2);
         // Also surface controls assigned TO this department (owner_department match),
@@ -3908,7 +3924,7 @@ app.get(
     })
 );
 
-app.get('/api/controls/next-id', requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO'), asyncHandler(async (req, res) => {
+app.get('/api/controls/next-id', can('control.create'), asyncHandler(async (req, res) => { // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO')
     const deptParam = req.query.department || 'GEN';
     const client = await pool.connect();
     try {
@@ -3921,7 +3937,7 @@ app.get('/api/controls/next-id', requireRole('Admin', 'Risk Manager', 'Risk Cham
 
 app.post(
     '/api/controls',
-    requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO'),
+    can('control.create'), // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO')
     validate(schemas.createControl),
     asyncHandler(async (req, res) => {
 
@@ -3985,7 +4001,7 @@ app.post(
 
 app.patch(
     '/api/controls/:id',
-    requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO'),
+    can('control.edit'), // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO')
     asyncHandler(async (req, res) => {
         const current = await pool.query('SELECT * FROM controls_lib WHERE id = $1 AND company_id = $2', [req.params.id, req.company.id]);
         if (current.rows.length === 0) return res.status(404).json({ error: 'Control not found' });
@@ -4039,7 +4055,7 @@ app.patch(
 // Link an existing control to a risk from within the risk register detail view.
 app.post(
     '/api/risks/:riskId/link-control',
-    requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO'),
+    can('control.link_to_risk'), // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO')
     asyncHandler(async (req, res) => {
         const { control_id } = req.body;
         if (!control_id) return res.status(400).json({ error: 'control_id required' });
@@ -4054,7 +4070,7 @@ app.post(
 // Unlink a control from a risk.
 app.delete(
     '/api/risks/:riskId/link-control/:controlId',
-    requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO'),
+    can('control.link_to_risk'), // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO')
     asyncHandler(async (req, res) => {
         await pool.query('DELETE FROM risk_controls WHERE risk_id = $1 AND control_id = $2', [req.params.riskId, req.params.controlId]);
         res.json({ ok: true });
@@ -4064,7 +4080,7 @@ app.delete(
 // Create a new control and immediately link it to a risk (Option A from design doc).
 app.post(
     '/api/risks/:riskId/create-and-link-control',
-    requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO'),
+    can('control.create'), // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO')
     asyncHandler(async (req, res) => {
         const riskRes = await pool.query('SELECT id, company_id FROM risks WHERE id = $1 AND company_id = $2', [req.params.riskId, req.company.id]);
         if (riskRes.rows.length === 0) return res.status(404).json({ error: 'Risk not found' });
@@ -4115,7 +4131,7 @@ app.post(
 // "linked controls" picker, or from the Control Library itself).
 app.post(
     '/api/controls/:id/link-risk',
-    requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO'),
+    can('control.link_to_risk'), // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO')
     asyncHandler(async (req, res) => {
         const { risk_id } = req.body;
         const control_id = req.params.id;
@@ -4136,7 +4152,7 @@ app.post(
 
 app.delete(
     '/api/controls/:id/link-risk/:riskId',
-    requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO'),
+    can('control.link_to_risk'), // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'Risk Champion', 'CRO')
     asyncHandler(async (req, res) => {
         await pool.query('DELETE FROM risk_controls WHERE control_id = $1 AND risk_id = $2', [req.params.id, req.params.riskId]);
         res.json({ message: 'Unlinked' });
@@ -4149,7 +4165,7 @@ app.delete(
 // results, never automatically from issue closure.
 app.post(
     '/api/controls/:id/test',
-    requireRole('Admin', 'Risk Manager', 'CRO', 'Consultant CRO'),
+    can('control.test'), // Phase C cutover -- was requireRole('Admin', 'Risk Manager', 'CRO', 'Consultant CRO')
     asyncHandler(async (req, res) => {
         const { test_type, test_date, result, notes, remediation_plan, remediation_owner, remediation_due_date } = req.body;
         if (!test_date || !result) return res.status(400).json({ error: 'test_date and result are required' });
@@ -4247,7 +4263,7 @@ app.post(
 
 app.get(
     '/api/controls/:id/tests',
-    requireRole('Admin', 'Risk Manager', 'CRO', 'Consultant CRO', 'Risk Champion', 'Risk Owner', 'Viewer'),
+    can('control.test_history.view'), // Phase C cutover -- was requireRole(all 8 roles)
     asyncHandler(async (req, res) => {
         const result = await pool.query(
             `SELECT ct.* FROM control_tests ct JOIN controls_lib cl ON cl.id = ct.control_id
