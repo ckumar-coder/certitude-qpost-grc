@@ -95,6 +95,7 @@ const SCHEMA_FILES = [
     'schema_v72_risk_gov_docs_embed_storage.sql',
     'schema_v73_remove_bcm_module.sql',
     'schema_v74_remove_maturity_assessment.sql',
+    'schema_v75_permissions_engine.sql',
 ];
 
 // Files that were applied before migration tracking was introduced.
