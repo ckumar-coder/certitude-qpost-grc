@@ -95,9 +95,14 @@ const NAV_ITEMS = [
     { id: 'departments',      label: 'Departments',        roles: ['Admin'], group: 'Admin' },
     { id: 'users',            label: 'Users & Access',     roles: ['Admin'], group: 'Admin' },
     { id: 'roles-permissions', label: 'Roles & Permissions', roles: ['Admin'], group: 'Admin' },
-    // Access Matrix retired for Admin as of Phase B — see App.jsx. Left in
-    // place for CRO/Consultant CRO only, who still use it as a reference.
-    { id: 'access-matrix',   label: 'Access Matrix',      roles: ['CRO', 'Consultant CRO'], group: 'Admin' },
+    // Access Matrix retired for Admin/Super Admin as of Phase B — see App.jsx.
+    // Left in place for CRO/Consultant CRO only, who still use it as a
+    // reference. noBypass: true opts this item out of the blanket
+    // Admin/Super-Admin "see every nav item" rule below, since App.jsx no
+    // longer has a matching route for them (they use Roles & Permissions
+    // instead) — without this flag the link stayed visible to Admin/Super
+    // Admin but pointed at nothing.
+    { id: 'access-matrix',   label: 'Access Matrix',      roles: ['CRO', 'Consultant CRO'], group: 'Admin', noBypass: true },
     { id: 'risk-config',      label: 'Risk Configuration', roles: ['Admin'], group: 'Admin' },
     { id: 'escalation-rules', label: 'Escalation Rules',   roles: ['Admin', 'CRO', 'Consultant CRO'], group: 'Admin' },
     { id: 'email-settings',   label: 'Email Settings',     roles: ['Admin'], group: 'Admin' },
@@ -181,7 +186,8 @@ export default function Layout({ page, onNavigate, children, groupView }) {
     const resolveDept = (code) => code ? (deptMap[code.toLowerCase()] || code) : null;
 
     const visibleItems = NAV_ITEMS.filter((item) =>
-        (role === 'Admin' || role === 'Super Admin' || item.roles.includes(role))
+        item.roles.includes(role) ||
+        ((role === 'Admin' || role === 'Super Admin') && !item.noBypass)
     ).filter((item) =>
         !(demoMode === 'risk-only' && (item.group === 'Governance' || item.group === 'Compliance'))
     );

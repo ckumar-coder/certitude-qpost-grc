@@ -1,7 +1,7 @@
 {
   "name": "erm-workstation",
-  "version": "2.44.0",
-  "description": "ERM Workstation -- v2.44.0 (Certitude Advisory Services)",
+  "version": "2.44.1",
+  "description": "ERM Workstation -- v2.44.1 (Certitude Advisory Services)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
