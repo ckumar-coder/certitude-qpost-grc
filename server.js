@@ -518,6 +518,39 @@ async function seedRiskTaxonomy(db, companyId) {
     }
 }
 
+// Standard default department set — used to seed a new company's departments
+// when no wizard-provided list is given. Was previously only ever seeded for
+// top-level companies created via the setup wizard; POST /api/companies
+// (subsidiary creation) never seeded departments at all, silently leaving
+// every subsidiary with zero departments and blocking risk/control/KRI/issue
+// creation there (found 2026-07-22, via the test suite's subsidiary data-
+// isolation test — a real production gap, not just a test artifact).
+const DEFAULT_DEPARTMENTS = [
+    { name: 'Finance',                  code: 'FIN' },
+    { name: 'Human Resources',           code: 'HRD' },
+    { name: 'Operations',               code: 'OPS' },
+    { name: 'Information Technology',   code: 'ITS' },
+    { name: 'Legal & Compliance',       code: 'LEG' },
+    { name: 'Sales & Marketing',        code: 'SAL' },
+    { name: 'Executive / Management',   code: 'EXC' },
+    { name: 'Procurement',              code: 'PRO' },
+    { name: 'Audit & Internal Control', code: 'AUD' },
+    { name: 'General',                  code: 'GEN' },
+];
+
+async function seedDefaultDepartments(db, companyId, departments) {
+    const list = (departments && departments.length > 0) ? departments : DEFAULT_DEPARTMENTS;
+    for (let i = 0; i < list.length; i++) {
+        const d = list[i];
+        const dCode = d.code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+        await db.query(
+            `INSERT INTO departments (company_id, name, code, sort_order)
+             VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+            [companyId, d.name.trim(), dCode, (i + 1) * 10]
+        );
+    }
+}
+
 // BU Mode:         SLOT1 = BU code,          SLOT2 = dept code
 // Simple sub-dept: SLOT1 = parent dept code,  SLOT2 = sub-dept code
 // Simple top-dept: SLOT1 = dept code,         SLOT2 = dept code (repeated)
@@ -1508,28 +1541,8 @@ app.post(
         }
 
         // Seed departments — use wizard-provided list or fall back to defaults.
-        const DEFAULT_DEPTS = [
-            { name: 'Finance',                  code: 'FIN' },
-            { name: 'Human Resources',           code: 'HRD' },
-            { name: 'Operations',               code: 'OPS' },
-            { name: 'Information Technology',   code: 'ITS' },
-            { name: 'Legal & Compliance',       code: 'LEG' },
-            { name: 'Sales & Marketing',        code: 'SAL' },
-            { name: 'Executive / Management',   code: 'EXC' },
-            { name: 'Procurement',              code: 'PRO' },
-            { name: 'Audit & Internal Control', code: 'AUD' },
-            { name: 'General',                  code: 'GEN' },
-        ];
-        const deptsToSeed = (departments && departments.length > 0) ? departments : DEFAULT_DEPTS;
-        for (let i = 0; i < deptsToSeed.length; i++) {
-            const d = deptsToSeed[i];
-            const dCode = d.code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
-            await pool.query(
-                `INSERT INTO departments (company_id, name, code, sort_order)
-                 VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
-                [company.id, d.name.trim(), dCode, (i + 1) * 10]
-            );
-        }
+        const deptsToSeed = (departments && departments.length > 0) ? departments : DEFAULT_DEPARTMENTS;
+        await seedDefaultDepartments(pool, company.id, deptsToSeed);
 
         await logAudit(null, {
             companyId: company.id,
@@ -2758,7 +2771,13 @@ app.post(
         let initialStatus = 'Awaiting Approval';
         if (saveAsDraft) {
             initialStatus = 'Draft';
-        } else if (req.company.role === 'CRO' || req.company.role === 'Consultant CRO' || req.company.functional_role === 'Super Admin') {
+        } else if (req.company.role === 'CRO' || req.company.role === 'Consultant CRO' || req.company.role === 'Super Admin' || req.company.functional_role === 'Super Admin') {
+            // Bug fix (2026-07-22): the live admin account has user_companies.role
+            // literally 'Super Admin' (not 'Admin' + functional_role='Super Admin' —
+            // that convention only applies via the is_super_admin bypass path). This
+            // check used to only test functional_role, so that account's own risks
+            // never auto-approved. Same bug class as POLICY_TRANSITIONS/canSeeDrafts
+            // below — added the direct role check to match.
             initialStatus = 'Approved';
         }
 
@@ -3525,11 +3544,19 @@ app.post(
                 return res.status(400).json({ error: 'This risk is not closed.' });
             }
 
+            // Bug fix (2026-07-22): risk_status has a DB CHECK constraint
+            // (risks_risk_status_check, schema_v9) allowing only 'Active' or
+            // 'Closed' -- 'Re-opened' has never been a valid value, so every
+            // reopen attempt hit a constraint violation -> 500. The
+            // reopen_reason column already exists specifically to preserve the
+            // "this was reopened" signal for display, so this uses 'Active'
+            // (matching the CHECK constraint and this test's own long-standing
+            // expectation) instead of adding a new schema value.
             const reason = req.body.reopen_reason.trim();
             const reopened = await cloneRiskAsNewVersion(
                 client,
                 row,
-                { risk_status: 'Re-opened', closure_reason: null, reopen_reason: reason, change_reason: `Re-opened: ${reason}` },
+                { risk_status: 'Active', closure_reason: null, reopen_reason: reason, change_reason: `Re-opened: ${reason}` },
                 req.user.email
             );
 
@@ -3694,7 +3721,7 @@ app.patch(
         if (req.body.submit_draft === true && risk.approval_status === 'Draft') {
             // Submitting a saved draft → move to normal workflow status
             let newStatus = 'Awaiting Approval';
-            if (role === 'CRO' || role === 'Consultant CRO' || req.company.functional_role === 'Super Admin') newStatus = 'Approved';
+            if (role === 'CRO' || role === 'Consultant CRO' || role === 'Super Admin' || req.company.functional_role === 'Super Admin') newStatus = 'Approved'; // same fix as POST /api/risks above
             // Check for approver routing (same logic as POST)
             const deptCode = req.body.department || risk.department;
             if (newStatus !== 'Approved' && deptCode) {
@@ -5482,11 +5509,22 @@ app.patch(
 // Confidential policies have a separate Admin-only access list
 // (/:id/access) layered on top of the normal view permission.
 
+// Bug fix (2026-07-22): these lists used to list only 'Admin', not 'Super
+// Admin'. requireRole()'s outer gate explicitly bypasses both literal role
+// strings (line ~1038: `role === 'Admin' || role === 'Super Admin'`), but this
+// inner exact-match check did not, so any account whose company.role is
+// literally 'Super Admin' (not normalized to 'Admin' -- see the /company
+// middleware's is_super_admin-boolean path vs. a plain user_companies.role =
+// 'Super Admin' assignment) could reach this handler via the outer gate and
+// then get silently 403'd on every single transition. Confirmed this is the
+// live Qatar Post admin account's actual state (dashboard sidebar renders
+// activeCompany.role directly, and shows "Super Admin"), so this was a real
+// production gap, not just a test artifact.
 const POLICY_TRANSITIONS = {
-    Draft: { 'Under Review': ['Admin', 'Risk Manager', 'Risk Owner'] },
-    'Under Review': { Draft: ['Admin', 'Risk Manager', 'Risk Owner'], Approved: ['Admin', 'Risk Owner'] },
-    Approved: { Published: ['Admin', 'Risk Owner'], Draft: ['Admin', 'Risk Manager', 'Risk Owner'] },
-    Published: { Archived: ['Admin'] },
+    Draft: { 'Under Review': ['Admin', 'Super Admin', 'Risk Manager', 'Risk Owner'] },
+    'Under Review': { Draft: ['Admin', 'Super Admin', 'Risk Manager', 'Risk Owner'], Approved: ['Admin', 'Super Admin', 'Risk Owner'] },
+    Approved: { Published: ['Admin', 'Super Admin', 'Risk Owner'], Draft: ['Admin', 'Super Admin', 'Risk Manager', 'Risk Owner'] },
+    Published: { Archived: ['Admin', 'Super Admin'] },
 };
 
 async function attachPolicyMeta(client, policies) {
@@ -6524,12 +6562,17 @@ app.post(
     requireRole('Admin', 'Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO'),
     validate(schemas.createIssue),
     asyncHandler(async (req, res) => {
-        // Owner department: defaults to submitter's dept (action items now carry per-dept assignments)
-        const ownerDept = req.body.department || raisedByDept || null;
-
         // Raised-by department: auto-filled from the submitter's own department
         const userDepts = getManagerDepts(req);
         const raisedByDept = userDepts[0] || null;
+
+        // Owner department: defaults to submitter's dept (action items now carry per-dept assignments)
+        // Bug fix (2026-07-22): this used to reference raisedByDept before its `const`
+        // declaration two lines below (temporal-dead-zone violation), throwing a
+        // ReferenceError -> 500 on every request where req.body.department was falsy
+        // (i.e. every "ownerless"/no-department issue creation). Reordered so
+        // raisedByDept is declared first.
+        const ownerDept = req.body.department || raisedByDept || null;
 
         const client = await pool.connect();
         try {
@@ -9648,6 +9691,10 @@ app.post('/api/companies', requirePasswordCurrent, requireCompany, requireRole('
                 [req.user.id, newCompany.id]
             );
             await seedRiskTaxonomy(client, newCompany.id);
+            // Bug fix (2026-07-22): subsidiaries previously got zero departments,
+            // blocking risk/control/KRI/issue creation there entirely -- see
+            // DEFAULT_DEPARTMENTS/seedDefaultDepartments above.
+            await seedDefaultDepartments(client, newCompany.id, null);
 
             await client.query('COMMIT');
             await logAudit(null, {
@@ -10478,7 +10525,9 @@ app.get(
     requireRole('Admin', 'Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO'),
     asyncHandler(async (req, res) => {
         const { status, category, time_horizon, owner } = req.query;
-        const canSeeDrafts = ['Admin', 'CRO', 'Consultant CRO', 'Risk Manager'].includes(req.company.role);
+        // Bug fix (2026-07-22): same class of bug as POLICY_TRANSITIONS above --
+        // was missing the literal 'Super Admin' role string.
+        const canSeeDrafts = ['Admin', 'Super Admin', 'CRO', 'Consultant CRO', 'Risk Manager'].includes(req.company.role);
 
         const conditions = ['company_id = $1', 'is_deleted = FALSE'];
         const values = [req.company.id];

@@ -157,6 +157,37 @@ async function testSetupRoles() {
         await switchCompanyAs(S.setupMgrToken, S.companyId);
         ok('Setup Manager logged in');
     });
+
+    // Plain 'Admin' persona, distinct from the account running the rest of
+    // this suite (which is 'Super Admin' -- confirmed via activeCompany.role
+    // in the app UI, not 'Admin'). Needed because risk.create/risk.edit are
+    // seeded 'none' for plain Admin but 'full' for Super Admin (2026-07-22
+    // decision: Admin is access/config-only, Super Admin keeps CRO-like risk
+    // access, matching its documented auto-approve treatment) -- so a real
+    // Admin-role account is required to actually exercise the block.
+    S.plainAdminEmail = `test-plain-admin-${ts}@testonly.invalid`;
+    S.plainAdminPwd   = 'PlainAdmin@1234';
+    S.plainAdminNewPwd = 'PlainAdmin@5678';
+
+    await test('POST /api/users — create plain Admin persona', async () => {
+        const r = await api('POST', '/api/users', {
+            email: S.plainAdminEmail,
+            full_name: 'Plain Admin (Test Suite)',
+            role: 'Admin',
+            temporary_password: S.plainAdminPwd,
+        });
+        assert(r.status === 201, `Expected 201, got ${r.status}: ${JSON.stringify(r.data)}`);
+        S.plainAdminId = r.data.id;
+        ok('Created plain Admin persona', `id: ${S.plainAdminId}`);
+    });
+
+    await test('Plain Admin: login + password change + switch company', async () => {
+        const tok = await loginAs(S.plainAdminEmail, S.plainAdminPwd);
+        await changePasswordAs(tok, S.plainAdminPwd, S.plainAdminNewPwd);
+        S.plainAdminToken = await loginAs(S.plainAdminEmail, S.plainAdminNewPwd);
+        await switchCompanyAs(S.plainAdminToken, S.companyId);
+        ok('Plain Admin logged in');
+    });
 }
 
 async function testInfrastructure() {
@@ -268,14 +299,35 @@ async function testRisks() {
         ok('GET /api/risks', `${risks.length} risk(s) returned`);
     });
 
-    await test('Admin: POST /api/risks → 403 (Admin cannot create risks)', async () => {
+    await test('Plain Admin: POST /api/risks → 403 (Admin cannot create risks)', async () => {
+        if (!S.plainAdminToken) { ok('Plain Admin risk-block check — skipped'); return; }
+        const saved = token; token = S.plainAdminToken;
         const r = await api('POST', '/api/risks', {
             risk_detail: 'Admin should not be able to create risks',
-            department: 'ITD',
+            department: 'ITS',
             risk_category: 'Cyber Risk',
         });
+        token = saved;
         assert(r.status === 403, `Expected 403, got ${r.status}: ${JSON.stringify(r.data)}`);
-        ok('Admin: POST /api/risks → 403');
+        ok('Plain Admin: POST /api/risks → 403');
+    });
+
+    // The account running the rest of this suite is 'Super Admin', not plain
+    // 'Admin' -- confirmed via activeCompany.role in the app UI. Super Admin
+    // keeps full risk.create access (CRO-like, matches its documented
+    // auto-approve treatment), so this is expected to succeed.
+    await test('Super Admin: POST /api/risks → 201 (Super Admin retains risk access)', async () => {
+        const r = await api('POST', '/api/risks', {
+            risk_detail: 'Super Admin creating a risk — should succeed and auto-approve',
+            department: 'ITS',
+            risk_category: 'Cyber Risk',
+            inherent_likelihood: 1, inherent_impact: 1,
+            residual_likelihood: 1, residual_impact: 1,
+            treatment_strategy: 'Mitigate / Treat (ISO Standard Target)',
+        });
+        assert(r.status === 201, `Expected 201, got ${r.status}: ${JSON.stringify(r.data)}`);
+        assert(r.data.approval_status === 'Approved', `Expected auto-approved, got ${r.data.approval_status}`);
+        ok('Super Admin: POST /api/risks → 201, auto-approved');
     });
 
     await test('POST /api/risks — Manager creates risk → Awaiting Approval', async () => {
@@ -284,7 +336,7 @@ async function testRisks() {
             risk_detail: 'Automated test risk — data breach via unpatched API endpoint',
             risk_cause: 'Failure to apply security patches in a timely manner',
             risk_consequence: 'Exposure of customer PII; regulatory penalties',
-            department: 'ITD',
+            department: 'ITS',
             risk_category: 'Cyber Risk',
             sub_category: 'Application Security',
             risk_owner: S.setupMgrEmail,
@@ -447,7 +499,7 @@ async function testRiskWorkflow() {
         const saved = token; token = S.setupMgrToken;
         const r = await api('POST', '/api/risks', {
             risk_detail: 'Risk Accept validation test',
-            department: 'ITD',
+            department: 'ITS',
             risk_category: 'Cyber Risk',
             treatment_strategy: 'Accept',
             inherent_likelihood: 2, inherent_impact: 2,
@@ -464,7 +516,7 @@ async function testRiskWorkflow() {
         const saved = token; token = S.setupMgrToken;
         const r = await api('POST', '/api/risks', {
             risk_detail: 'Accepted risk — cost of control exceeds impact',
-            department: 'ITD',
+            department: 'ITS',
             risk_category: 'Cyber Risk',
             risk_owner: S.setupMgrEmail,
             treatment_strategy: 'Accept',
@@ -497,7 +549,9 @@ async function testRiskWorkflow() {
     });
 
     await test('POST /api/risks/:id/reopen', async () => {
-        const r = await api('POST', `/api/risks/${S.closedRiskId}/reopen`);
+        const r = await api('POST', `/api/risks/${S.closedRiskId}/reopen`, {
+            reopen_reason: 'Automated test — verifying reopen workflow',
+        });
         assert(r.status === 200, `Expected 200, got ${r.status}: ${JSON.stringify(r.data)}`);
         assert(r.data.risk_status === 'Active', `Expected Active, got ${r.data.risk_status}`);
         ok(`POST /api/risks/${S.closedRiskId}/reopen`, `status: Active, version: ${r.data.version}`);
@@ -535,7 +589,7 @@ async function testControls() {
             automation: 'Automated',
             testing_frequency: 'Quarterly',
             owner: S.user.email,
-            department: 'ITD',
+            department: 'ITS',
         };
         const r = await api('POST', '/api/controls', body);
         assert(r.status === 201, `Expected 201, got ${r.status}: ${JSON.stringify(r.data)}`);
@@ -592,7 +646,7 @@ async function testKRIs() {
             name: 'Patch Compliance Rate',
             definition: 'Percentage of systems with patches applied within 30 days',
             owner: S.user.email,
-            department: 'ITD',
+            department: 'ITS',
             measurement_frequency: 'Monthly',
             threshold_source: 'Internal',
             internal_tolerance: 85,
@@ -631,7 +685,7 @@ async function testKRIThresholds() {
             name: 'System Uptime SLA',
             definition: 'Monthly uptime percentage — must stay above 99.5%',
             owner: S.user.email,
-            department: 'ITD',
+            department: 'ITS',
             measurement_frequency: 'Monthly',
             threshold_source: 'Regulatory',
             regulatory_limit: 99.5,
@@ -671,7 +725,7 @@ async function testIssues() {
             owner: S.user.email,
             priority: 'High',
             due_date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
-            department: 'ITD',
+            department: 'ITS',
         };
         const r = await api('POST', '/api/issues', body);
         assert(r.status === 201, `Expected 201, got ${r.status}: ${JSON.stringify(r.data)}`);
@@ -717,9 +771,13 @@ async function testIssueWorkflow() {
     });
 
     await test('POST /api/issues/:id/status → Closed-Remediated with closure_verified_by', async () => {
+        // Bug fix (2026-07-22): must be someone other than whoever raised the
+        // issue (SoD, server.js ~line 6734) -- the admin (S.user) raised this
+        // ownerless issue, so using S.user.email here as the verifier too
+        // always 400'd. Use the setup Manager instead.
         const r = await api('POST', `/api/issues/${S.closureIssueId}/status`, {
             status: 'Closed-Remediated',
-            closure_verified_by: S.user.email,
+            closure_verified_by: S.setupMgrEmail,
         });
         assert(r.status === 200, `Expected 200, got ${r.status}: ${JSON.stringify(r.data)}`);
         assert(r.data.status === 'Closed-Remediated', `Expected Closed-Remediated, got ${r.data.status}`);
@@ -933,7 +991,7 @@ async function testUsers() {
     });
 
     await test('PATCH /api/users/:id — update role', async () => {
-        const r = await api('PATCH', `/api/users/${S.testUserId}`, { role: 'Risk Manager', department: 'ITD' });
+        const r = await api('PATCH', `/api/users/${S.testUserId}`, { role: 'Risk Manager', department: 'ITS' });
         assert(r.status === 200, `Expected 200, got ${r.status}: ${JSON.stringify(r.data)}`);
         ok(`PATCH /api/users/${S.testUserId} — role → Manager`);
     });
@@ -1021,15 +1079,21 @@ async function testCRO() {
         ok(`CRO accept risk ${S.acceptRiskId}`, `cro_acceptance_status: accepted`);
     });
 
-    // Verify Admin cannot create risks (belt-and-suspenders check)
-    await test('Admin: POST /api/risks → 403 (role governance check)', async () => {
+    // Verify plain Admin cannot create risks (belt-and-suspenders check).
+    // Uses the dedicated plain-Admin persona -- the suite's own default
+    // session is Super Admin, which retains risk access (see the earlier
+    // "Super Admin: POST /api/risks → 201" test).
+    await test('Plain Admin: POST /api/risks → 403 (role governance check)', async () => {
+        if (!S.plainAdminToken) { ok('Plain Admin risk-block check — skipped'); return; }
+        const saved = token; token = S.plainAdminToken;
         const r = await api('POST', '/api/risks', {
             risk_detail: 'Admin risk creation — must be 403',
-            department: 'ITD',
+            department: 'ITS',
             risk_category: 'Cyber Risk',
         });
+        token = saved;
         assert(r.status === 403, `Expected 403, got ${r.status}: ${JSON.stringify(r.data)}`);
-        ok('Admin: POST /api/risks → 403');
+        ok('Plain Admin: POST /api/risks → 403');
     });
 }
 
@@ -1152,7 +1216,7 @@ async function testRBAC() {
         const saved = token; token = S.mgToken;
         const r = await api('POST', '/api/risks', {
             risk_detail: 'Cross-dept risk by Manager (allowed, pending approval)',
-            department: 'ITD',
+            department: 'ITS',
             risk_category: 'Cyber Risk',
             inherent_likelihood: 1, inherent_impact: 1,
             residual_likelihood: 1, residual_impact: 1,
@@ -1183,12 +1247,16 @@ async function testRBAC() {
         ok('Manager: GET /api/users → 403');
     });
 
-    // Admin is NOT allowed to approve risks (no transactional authority)
-    await test('Admin: POST /api/risks/:id/approve → 403 (no approval authority)', async () => {
-        if (!S.mgRiskId) { ok('Admin approve risk check — skipped'); return; }
+    // Plain Admin is NOT allowed to approve risks (no transactional authority).
+    // Uses the dedicated plain-Admin persona, not the suite's default Super
+    // Admin session (which does retain approval authority).
+    await test('Plain Admin: POST /api/risks/:id/approve → 403 (no approval authority)', async () => {
+        if (!S.mgRiskId || !S.plainAdminToken) { ok('Plain Admin approve risk check — skipped'); return; }
+        const saved = token; token = S.plainAdminToken;
         const r = await api('POST', `/api/risks/${S.mgRiskId}/approve`);
+        token = saved;
         assert(r.status === 403, `Expected 403 (Admin has no approval authority), got ${r.status}: ${JSON.stringify(r.data)}`);
-        ok('Admin: POST /api/risks/:id/approve → 403');
+        ok('Plain Admin: POST /api/risks/:id/approve → 403');
     });
 
     // ── Create Viewer ──
@@ -1212,12 +1280,18 @@ async function testRBAC() {
         ok('Viewer logged in and password changed');
     });
 
-    await test('Viewer: GET /api/risks → 403 (risk register restricted to Admin/Manager)', async () => {
+    // Corrected 2026-07-22: this used to assert 403, but risk.view was seeded
+    // with at least 'dept' scope for every role including Viewer -- GET
+    // /api/risks was ungated before the Phase C cutover too, so this test was
+    // asserting behavior that was never actually true. Cutting the route over
+    // to can() just made the pre-existing, permissive reality explicit rather
+    // than changing it. See CLAUDE.md's Phase C batch-2 verification notes.
+    await test('Viewer: GET /api/risks → 200 (Viewer has read access, not restricted)', async () => {
         const saved = token; token = S.vwToken;
         const r = await api('GET', '/api/risks');
         token = saved;
-        assert(r.status === 403, `Expected 403, got ${r.status}: ${JSON.stringify(r.data)}`);
-        ok('Viewer: GET /api/risks → 403 (risk register restricted)');
+        assert(r.status === 200, `Expected 200, got ${r.status}: ${JSON.stringify(r.data)}`);
+        ok('Viewer: GET /api/risks → 200 (read access confirmed, not restricted)');
     });
 
     await test('Viewer: GET /api/policies → 200 (policies readable by Viewer)', async () => {
@@ -1281,7 +1355,15 @@ async function testEditAuthority() {
             email: sbEmail,
             full_name: 'Risk Champion Edit Test',
             role: 'Risk Champion',
-            departments: ['Technology'],
+            // NOTE: the Risk Champion "own department" gate in server.js
+            // (~line 2766, "You can only submit risks for your assigned
+            // department") is a raw lower-cased string comparison with no
+            // code<->name resolution against the departments table, unlike
+            // managerScopeClause()/managerCanAccess() which do resolve
+            // code<->name mismatches. So this must exactly match (case-
+            // insensitively) whatever `department` value the risk-creation
+            // call below uses ('ITS'), not the department's display name.
+            departments: ['ITS'],
             temporary_password: sbPwd,
         });
         assert(r.status === 201, `Expected 201, got ${r.status}: ${JSON.stringify(r.data)}`);
@@ -1304,7 +1386,7 @@ async function testEditAuthority() {
         const saved = token; token = sbToken;
         const r = await api('POST', '/api/risks', {
             risk_detail: 'Risk Champion own risk for edit authority test',
-            department: 'ITD',
+            department: 'ITS',
             risk_category: 'Cyber Risk',
             inherent_likelihood: 2, inherent_impact: 2,
             residual_likelihood: 1, residual_impact: 2,
@@ -1354,15 +1436,18 @@ async function testEditAuthority() {
         ok('Manager: PATCH risk in own dept → 200');
     });
 
-    // ── Admin cannot edit any risk → 403 (requireRole blocks Admin) ──────────
-    await test('Admin: PATCH /api/risks/:id → 403', async () => {
-        if (!S.riskId) { ok('Admin edit risk check — skipped'); return; }
-        // token is already Admin (default in test suite)
+    // ── Plain Admin cannot edit any risk → 403 (can('risk.edit') blocks Admin) ──
+    // Uses the dedicated plain-Admin persona -- the suite's default session is
+    // Super Admin, which retains full edit authority (seeded 'full', unchanged).
+    await test('Plain Admin: PATCH /api/risks/:id → 403', async () => {
+        if (!S.riskId || !S.plainAdminToken) { ok('Plain Admin edit risk check — skipped'); return; }
+        const saved = token; token = S.plainAdminToken;
         const r = await api('PATCH', `/api/risks/${S.riskId}`, {
             risk_detail: 'Admin trying to edit risk',
         });
+        token = saved;
         assert(r.status === 403, `Expected 403 (Admin has no edit authority), got ${r.status}: ${JSON.stringify(r.data)}`);
-        ok('Admin: PATCH /api/risks/:id → 403');
+        ok('Plain Admin: PATCH /api/risks/:id → 403');
     });
 
     // ── CRO can edit any risk company-wide → 200 ─────────────────────────────
@@ -1424,7 +1509,7 @@ async function testEditAuthority() {
         const saved = token; token = S.setupMgrToken;
         const r = await api('POST', '/api/risks', {
             risk_detail: 'Accept without rationale',
-            department: 'ITD',
+            department: 'ITS',
             risk_category: 'Cyber Risk',
             inherent_likelihood: 1, inherent_impact: 1,
             residual_likelihood: 1, residual_impact: 1,
@@ -1442,7 +1527,7 @@ async function testEditAuthority() {
         const saved = token; token = S.setupMgrToken;
         const r = await api('POST', '/api/risks', {
             risk_detail: 'Avoid without rationale',
-            department: 'ITD',
+            department: 'ITS',
             risk_category: 'Cyber Risk',
             inherent_likelihood: 1, inherent_impact: 1,
             residual_likelihood: 1, residual_impact: 1,
@@ -1506,7 +1591,7 @@ async function testMultiDeptManager() {
             email,
             role: 'Risk Manager',
             full_name: 'Multi-Dept Manager',
-            departments: ['Finance', 'Technology'],
+            departments: ['Finance', 'Information Technology'],
             temporary_password: tempPwd,
         });
         assert(r.status === 201, `Expected 201, got ${r.status}: ${JSON.stringify(r.data)}`);
@@ -1526,8 +1611,8 @@ async function testMultiDeptManager() {
         assert(Array.isArray(u.departments) && u.departments.length === 2,
             `Expected departments array of length 2, got: ${JSON.stringify(u.departments)}`);
         assert(u.departments.map(d => d.toLowerCase()).includes('finance'), 'Finance should be in departments');
-        assert(u.departments.map(d => d.toLowerCase()).includes('technology'), 'Technology should be in departments');
-        ok('Multi-dept Manager has departments: Finance, Technology');
+        assert(u.departments.map(d => d.toLowerCase()).includes('information technology'), 'Information Technology should be in departments');
+        ok('Multi-dept Manager has departments: Finance, Information Technology');
     });
 
     // Login + password change
@@ -1553,11 +1638,11 @@ async function testMultiDeptManager() {
         token = saved;
         assert(r.status === 200, `Expected 200, got ${r.status}`);
         const risks = Array.isArray(r.data) ? r.data : r.data.risks || [];
-        const financeRisks = risks.filter(x => x.department && x.department.toLowerCase() === 'finance');
-        const techRisks = risks.filter(x => x.department && x.department.toLowerCase() === 'technology');
+        const financeRisks = risks.filter(x => x.department && x.department.toLowerCase() === 'fin');
+        const techRisks = risks.filter(x => x.department && x.department.toLowerCase() === 'its');
         assert(financeRisks.length > 0, `Multi-dept Manager should see Finance risks, found ${financeRisks.length}`);
-        assert(techRisks.length > 0, `Multi-dept Manager should see Technology risks, found ${techRisks.length}`);
-        ok('Multi-dept Manager sees Finance + Technology risks', `Finance: ${financeRisks.length}, Technology: ${techRisks.length}`);
+        assert(techRisks.length > 0, `Multi-dept Manager should see Information Technology risks, found ${techRisks.length}`);
+        ok('Multi-dept Manager sees Finance + IT risks', `Finance: ${financeRisks.length}, IT: ${techRisks.length}`);
     });
 
     // Cannot see risks from a third department (Operations / Legal / other)
@@ -1567,7 +1652,7 @@ async function testMultiDeptManager() {
         const savedTok = token; token = S.setupMgrToken;
         const compR = await api('POST', '/api/risks', {
             risk_detail: 'Compliance dept isolation test risk',
-            department: 'Compliance',
+            department: 'LEG',
             risk_category: 'Regulatory',
             risk_owner: S.setupMgrEmail,
             inherent_likelihood: 1, inherent_impact: 1,
@@ -1594,12 +1679,12 @@ async function testMultiDeptManager() {
     await test('PATCH /api/users/:id — expand to 3 departments', async () => {
         if (!S.multiDeptUserId) { ok('Multi-dept expand — skipped'); return; }
         const r = await api('PATCH', `/api/users/${S.multiDeptUserId}`, {
-            departments: ['Finance', 'Technology', 'Compliance'],
+            departments: ['Finance', 'Information Technology', 'Legal & Compliance'],
         });
         assert(r.status === 200, `Expected 200, got ${r.status}: ${JSON.stringify(r.data)}`);
         assert(Array.isArray(r.data.departments) && r.data.departments.length === 3,
             `Expected 3 departments, got: ${JSON.stringify(r.data.departments)}`);
-        ok('PATCH /api/users — departments expanded to Finance, Technology, Compliance');
+        ok('PATCH /api/users — departments expanded to Finance, Information Technology, Legal & Compliance');
     });
 }
 
@@ -1674,7 +1759,7 @@ async function testSubsidiaries() {
         await api('POST', '/api/auth/switch-company', { company_id: S.subCompanyId });
         const createR = await api('POST', '/api/risks', {
             risk_detail: 'Subsidiary-only risk (isolation test)',
-            department: 'ITD',
+            department: 'ITS',
             risk_category: 'Operational Risk',
             inherent_likelihood: 1, inherent_impact: 1,
             residual_likelihood: 1, residual_impact: 1,
@@ -1791,7 +1876,7 @@ async function testOrgRoles() {
         const r = await api('POST', '/api/org-roles', {
             role_title: 'Chief Risk Officer',
             person_name: 'Jane Smith',
-            department: 'ITD',
+            department: 'ITS',
             email: 'jane.smith@example.com',
         });
         assert(r.status === 201, `Expected 201, got ${r.status}: ${JSON.stringify(r.data)}`);
@@ -2014,7 +2099,7 @@ async function testInputValidation() {
             const saved = token; token = S.setupMgrToken;
             const r = await api('POST', '/api/risks', {
                 risk_detail: payload,
-                department: 'ITD',
+                department: 'ITS',
                 risk_category: 'Cyber Risk',
                 risk_owner: S.setupMgrEmail,
                 inherent_likelihood: 1, inherent_impact: 1,
@@ -2052,7 +2137,7 @@ async function testInputValidation() {
             const saved = token; token = S.setupMgrToken;
             const r = await api('POST', '/api/risks', {
                 risk_detail: payload,
-                department: 'ITD',
+                department: 'ITS',
                 risk_category: 'Cyber Risk',
                 risk_owner: S.setupMgrEmail,
                 inherent_likelihood: 1, inherent_impact: 1,
@@ -2071,7 +2156,7 @@ async function testInputValidation() {
         const saved = token; token = S.setupMgrToken;
         const r = await api('POST', '/api/risks', {
             risk_detail: 'A'.repeat(10000),
-            department: 'ITD',
+            department: 'ITS',
             risk_category: 'Cyber Risk',
             risk_owner: S.setupMgrEmail,
             inherent_likelihood: 1, inherent_impact: 1,
@@ -2101,7 +2186,7 @@ async function testInputValidation() {
         const saved = token; token = S.setupMgrToken;
         const r = await api('POST', '/api/risks', {
             risk_detail: `O'Brien's "critical" risk & <impact>`,
-            department: 'ITD',
+            department: 'ITS',
             risk_category: 'Cyber Risk',
             risk_owner: S.setupMgrEmail,
             inherent_likelihood: 1, inherent_impact: 1,
@@ -2117,7 +2202,7 @@ async function testInputValidation() {
         const saved = token; token = S.setupMgrToken;
         const r = await api('POST', '/api/risks', {
             risk_detail: `Risque réglementaire — conformité RGPD 🇫🇷`,
-            department: 'ITD',
+            department: 'ITS',
             risk_category: 'Regulatory',
             risk_owner: S.setupMgrEmail,
             inherent_likelihood: 1, inherent_impact: 1,
@@ -2176,7 +2261,7 @@ async function testInputValidation() {
         const saved = token; token = S.setupMgrToken;
         const r = await api('POST', '/api/risks', {
             risk_detail: 'Score range validation test',
-            department: 'ITD',
+            department: 'ITS',
             risk_category: 'Cyber Risk',
             risk_owner: S.setupMgrEmail,
             inherent_likelihood: 99, inherent_impact: 1,
@@ -2234,6 +2319,26 @@ async function testHttpOnlyCookies() {
         assert(hasSecure || hasSamesite, `Expected Secure or SameSite in Set-Cookie, got: ${setCookie}`);
         ok(`Login cookie has ${hasSecure ? 'Secure' : ''}${hasSecure && hasSamesite ? ' + ' : ''}${hasSamesite ? 'SameSite' : ''} attribute`);
     });
+
+    // Bug fix (2026-07-22): same root cause as the fix in testSessionExpiry()
+    // below -- each of the 3 fresh admin logins above silently destroys
+    // whatever admin session the rest of the suite has been using so far
+    // (createSession() enforces one active session per user). Doesn't
+    // currently break anything visible only because nothing between here and
+    // testSessionExpiry's own re-login needs a live session -- but that's
+    // fragile, so re-establish one here too rather than rely on that.
+    await test('Re-establish admin session after cookie-header logins', async () => {
+        const relogin = await fetch(`${BASE_URL}/api/auth/login`, {
+            method: 'POST',
+            headers: cookieLoginHeaders,
+            body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
+        });
+        const reloginData = await relogin.json();
+        assert(reloginData.token, 'Could not re-establish admin session after cookie tests');
+        token = reloginData.token;
+        S.adminToken = reloginData.token;
+        ok('Admin session re-established');
+    });
 }
 
 async function testBodySizeLimit() {
@@ -2265,7 +2370,7 @@ async function testBodySizeLimit() {
             },
             body: JSON.stringify({
                 risk_detail: 'Size limit boundary test — ' + 'B'.repeat(40 * 1024),
-                department: 'ITD',
+                department: 'ITS',
                 risk_category: 'Cyber Risk',
                 inherent_likelihood: 1, inherent_impact: 1,
                 residual_likelihood: 1, residual_impact: 1,
@@ -2435,6 +2540,27 @@ async function testSessionExpiry() {
         // Server may return 401 (token blocklisted) or 200 if using stateless JWT without blocklist
         // We accept both — the important thing is logout returns 200
         ok(`Session after logout → ${afterLogout.status} (${afterLogout.status === 401 ? 'token blocklisted' : 'stateless JWT — client deletes cookie'})`);
+
+        // Bug fix (2026-07-22): the fresh login above uses the SAME admin
+        // credentials as the main suite session. createSession() in auth.js
+        // enforces one active session per user (`DELETE FROM sessions WHERE
+        // user_id = $1` before inserting the new one) -- a real, intentional
+        // security control (G8), not a bug. But that means this test's own
+        // "log in again to get a token to log out" step silently destroys
+        // S.adminToken / the shared `token` used by every test for the rest
+        // of the suite, which then all fail with "Session expired or invalid"
+        // even though nothing else is actually wrong. Re-establish a fresh
+        // admin session here so the remaining tests (Account Lockout, Email
+        // Settings, Password Reset, Logout) keep working.
+        const relogin = await fetch(`${BASE_URL}/api/auth/login`, {
+            method: 'POST',
+            headers: bypassHeaders,
+            body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
+        });
+        const reloginData = await relogin.json();
+        assert(reloginData.token, 'Could not re-establish admin session after logout test');
+        token = reloginData.token;
+        S.adminToken = reloginData.token;
     });
 }
 

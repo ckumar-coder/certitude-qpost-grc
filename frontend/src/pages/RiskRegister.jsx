@@ -149,10 +149,15 @@ function ApprovalBadge({ status }) {
     return <span className={`badge ${cls}`}>{status}</span>;
 }
 
-// Open/Closed/Re-opened lifecycle badge
-function StatusBadge({ status }) {
-    if (status === 'Closed')    return <span className="badge badge-role">Closed</span>;
-    if (status === 'Re-opened') return <span className="badge badge-medium">Re-opened</span>;
+// Open/Closed/Re-opened lifecycle badge.
+// Bug fix (2026-07-22): risk_status only ever holds 'Active' or 'Closed'
+// (DB CHECK constraint, schema_v9) -- 'Re-opened' was never a valid stored
+// value, so the reopen endpoint 500'd on every attempt. Now that reopen
+// correctly writes 'Active', the "was reopened" signal is derived here from
+// reopen_reason being set instead of a status value that can't exist.
+function StatusBadge({ status, reopenReason }) {
+    if (status === 'Closed')  return <span className="badge badge-role">Closed</span>;
+    if (reopenReason)         return <span className="badge badge-medium">Re-opened</span>;
     return <span className="badge badge-approved">Open</span>;
 }
 
@@ -524,7 +529,7 @@ export default function RiskRegister({ fromIncidentId = null, onIncidentLinked =
                                                 </div>
                                             </td>
                                             <td><ApprovalBadge status={r.approval_status} /></td>
-                                            <td><StatusBadge status={r.risk_status} /></td>
+                                            <td><StatusBadge status={r.risk_status} reopenReason={r.reopen_reason} /></td>
                                             <td>
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                                     {r.appetite_category_breach && <span className="badge badge-extreme">Exceeds Appetite</span>}
@@ -872,7 +877,7 @@ export function RiskDetail({ risk: r, api, onClose, onReopen, onRefresh, onEditD
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end', flexShrink: 0 }}>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                         <ApprovalBadge status={r.approval_status} />
-                        <StatusBadge status={r.risk_status} />
+                        <StatusBadge status={r.risk_status} reopenReason={r.reopen_reason} />
                     </div>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                         {(() => { const s = scoreBadge(r.inherent_likelihood, r.inherent_impact); return <span className={`badge ${s.className}`} title="Inherent">Inherent: {s.label} ({s.score})</span>; })()}
@@ -1099,11 +1104,11 @@ export function RiskDetail({ risk: r, api, onClose, onReopen, onRefresh, onEditD
                 <div className="form-group">
                     <label>Risk Status</label>
                     <div style={{ padding: '6px 0' }}>
-                        <StatusBadge status={r.risk_status} />
+                        <StatusBadge status={r.risk_status} reopenReason={r.reopen_reason} />
                         {r.risk_status === 'Closed' && r.closure_reason && (
                             <div className="text-muted" style={{ marginTop: 4, fontSize: 13 }}>Reason: {r.closure_reason}</div>
                         )}
-                        {r.risk_status === 'Re-opened' && r.reopen_reason && (
+                        {r.risk_status !== 'Closed' && r.reopen_reason && (
                             <div className="text-muted" style={{ marginTop: 4, fontSize: 13 }}>Re-open reason: {r.reopen_reason}</div>
                         )}
                     </div>
