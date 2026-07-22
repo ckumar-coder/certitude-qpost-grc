@@ -10008,17 +10008,25 @@ app.get('/api/consolidated-summary', requirePasswordCurrent, requireCompany,
 // ============================================================
 // Incident Log Module — /api/incidents/*
 // ============================================================
-// NOTE: INCIDENT_WRITE_ROLES deliberately excludes Admin — Admin can view
-// incidents but not log/edit one, unlike almost every other module where
-// Admin has full access. Confirmed still true as of 2026-07-21; this is
-// the exact gap that blocked capturing an Admin/Super-Admin screenshot of
-// the "Log New Incident" form for the Risk Champion User Manual (see
-// CLAUDE.md "Documentation — pending items"). Flagged as a likely-
-// unintentional gap in Documents/Internal/RBAC_Permissions_Engine_Scoping.docx
-// Finding 5, not documented policy.
+// Historical note, corrected 2026-07-22: the comment here used to claim
+// "INCIDENT_WRITE_ROLES deliberately excludes Admin -- Admin can view
+// incidents but not log/edit one." That described the literal array only,
+// not actual enforced behavior -- requireRole()'s unconditional Admin/
+// Super-Admin bypass (see the comment above requireRole()) has always let
+// Admin through regardless of this array, so Admin has in practice always
+// had full incident write access. Finding 5 (RBAC_Permissions_Engine_
+// Scoping.docx) is resolved per Decision 2 in CLAUDE.md: incident.create
+// is a non-configurable safety-baseline capability (full for every role,
+// including Viewer -- wide reporting intake), while edit/delete/link_risk/
+// dismiss stay role-restricted (the seeded role_permissions rows for those
+// four capabilities already match today's actual bypass-inclusive
+// behavior exactly -- Admin/Super Admin full, RM/RC/RO scoped, Viewer
+// none -- so cutting over below is zero-behavior-change, not a new
+// exclusion).
 
-const INCIDENT_ROLES = ['Admin', 'Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO', 'Viewer'];
-const INCIDENT_WRITE_ROLES = ['Risk Manager', 'Risk Champion', 'Risk Owner', 'CRO', 'Consultant CRO'];
+// INCIDENT_ROLES / INCIDENT_WRITE_ROLES were removed 2026-07-22 once every
+// route below was cut over to can() -- no remaining call site references
+// them (grepped clean before deletion).
 
 // Auto-generate next incident UID (INC-001, INC-002, …)
 async function nextIncidentUid(companyId) {
@@ -10034,7 +10042,7 @@ async function nextIncidentUid(companyId) {
 
 app.get(
     '/api/incidents',
-    requireRole(...INCIDENT_ROLES),
+    can('incident.view'), // Phase C cutover -- was requireRole(...INCIDENT_ROLES)
     asyncHandler(async (req, res) => {
         const result = await pool.query(
             `SELECT i.*,
@@ -10052,7 +10060,7 @@ app.get(
 
 app.post(
     '/api/incidents',
-    requireRole(...INCIDENT_WRITE_ROLES),
+    can('incident.create'), // Phase C cutover -- was requireRole(...INCIDENT_WRITE_ROLES); incident.create is a safety-baseline capability (Decision 2/3) -- full for every role including Admin and Viewer, wide reporting intake by design
     asyncHandler(async (req, res) => {
         const { title, incident_date, description, severity, status, affected_dept, root_cause, action_taken, reported_by } = req.body;
         if (!title || !title.trim()) return res.status(400).json({ error: 'title is required' });
@@ -10074,7 +10082,7 @@ app.post(
 
 app.put(
     '/api/incidents/:id',
-    requireRole(...INCIDENT_WRITE_ROLES),
+    can('incident.edit'), // Phase C cutover -- was requireRole(...INCIDENT_WRITE_ROLES)
     asyncHandler(async (req, res) => {
         const { title, incident_date, description, severity, status, affected_dept, root_cause, action_taken, reported_by } = req.body;
         const result = await pool.query(
@@ -10103,7 +10111,7 @@ app.put(
 
 app.delete(
     '/api/incidents/:id',
-    requireRole('Risk Manager', 'CRO', 'Consultant CRO'),
+    can('incident.delete'), // Phase C cutover -- was requireRole('Risk Manager', 'CRO', 'Consultant CRO')
     asyncHandler(async (req, res) => {
         const result = await pool.query(
             `UPDATE incident_log SET is_deleted = true, updated_at = NOW()
@@ -10120,7 +10128,7 @@ app.delete(
 // Body: { risk_id, decision } where decision is 'Linked' or 'Risk Created'
 app.patch(
     '/api/incidents/:id/link-risk',
-    requireRole(...INCIDENT_WRITE_ROLES),
+    can('incident.link_risk'), // Phase C cutover -- was requireRole(...INCIDENT_WRITE_ROLES)
     asyncHandler(async (req, res) => {
         const incidentId = parseInt(req.params.id, 10);
         const { risk_id, decision } = req.body;
@@ -10161,7 +10169,7 @@ app.patch(
 // PATCH /api/incidents/:id/dismiss — Option 3: no register entry required
 app.patch(
     '/api/incidents/:id/dismiss',
-    requireRole(...INCIDENT_WRITE_ROLES),
+    can('incident.dismiss'), // Phase C cutover -- was requireRole(...INCIDENT_WRITE_ROLES)
     asyncHandler(async (req, res) => {
         const incidentId = parseInt(req.params.id, 10);
         const { dismiss_note } = req.body;
