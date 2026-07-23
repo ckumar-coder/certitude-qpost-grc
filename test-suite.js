@@ -1405,18 +1405,24 @@ async function testEditAuthority() {
         ok('Risk Champion: POST /api/risks → 201', `id: ${sbRiskId}`);
     });
 
-    // ── Risk Champion edits their own risk → 200 ─────────────────────────────────
-    await test('Risk Champion: PATCH own risk → 200', async () => {
+    // ── Risk Champion cannot edit their own risk once it's no longer Draft ───────
+    // Confirmed 2026-07-23 (Chandrashekar): Risk Champion (and Risk Owner) may
+    // only edit a risk while it is still in Draft status; once submitted they
+    // can no longer edit it. POST /api/risks creates the risk directly in
+    // 'Awaiting Approval' status (not Draft), so a PATCH immediately after
+    // creation now correctly returns 403. This test previously asserted the
+    // old, incorrect behavior (200) — corrected here to match the confirmed
+    // policy, which PATCH /api/risks/:id now enforces server-side (Phase D
+    // batch 5, closing a gap where this was only enforced in the frontend).
+    await test('Risk Champion: PATCH own submitted risk → 403 (Draft-only edit policy)', async () => {
         if (!sbToken || !sbRiskId) { ok('Risk Champion edit own risk — skipped'); return; }
         const saved = token; token = sbToken;
         const r = await api('PATCH', `/api/risks/${sbRiskId}`, {
             risk_detail: 'Risk Champion own risk — edited by submitter',
         });
         token = saved;
-        assert(r.status === 200, `Expected 200, got ${r.status}: ${JSON.stringify(r.data)}`);
-        assert(r.data.risk_detail === 'Risk Champion own risk — edited by submitter',
-            `risk_detail not updated: ${r.data.risk_detail}`);
-        ok('Risk Champion: PATCH own risk → 200');
+        assert(r.status === 403, `Expected 403, got ${r.status}: ${JSON.stringify(r.data)}`);
+        ok('Risk Champion: PATCH own submitted risk → 403 (Draft-only edit policy)');
     });
 
     // ── Risk Champion cannot edit another user's risk → 403 ──────────────────────
