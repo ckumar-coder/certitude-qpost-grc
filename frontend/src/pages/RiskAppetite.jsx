@@ -1,11 +1,18 @@
 // RiskAppetite.jsx — Risk Appetite page (category-level statements).
-// `canEdit` (below) is Admin/CRO/Consultant CRO. Note the backend's view
-// role list also includes a role literally named 'Approver' that isn't
-// in the assignable roles list (UserManagement.jsx) — see
-// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx Finding 4 and
-// section 3.6.
+// `canEdit`/`canViewHistory` (below) gate managing statements and viewing
+// their version history. Phase D batch 4 (2026-07-23): cut over from a
+// role literal (['Admin', 'CRO', 'Consultant CRO'] -- missing Super Admin,
+// a real gap, since risk_appetite.manage is seeded full for Super Admin
+// too and the backend's POST/DELETE/history routes already accept them
+// via the bypass/can() cutover from Phase C batch 9) to
+// usePermission('risk_appetite.manage'). Both flags share an identical
+// role list and the same backend capability, so one check covers both.
+// The stale 'Approver' role note this comment used to carry was resolved
+// by Decision 2/Finding 4 (the dead role string was deleted outright) back
+// in Phase C batch 9 -- no longer relevant here. See
+// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx section 3.6.
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../AuthContext';
+import { useAuth, usePermission } from '../AuthContext';
 import { useT } from '../contexts/LanguageContext';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
@@ -621,12 +628,10 @@ function AppetiteForm({ categories, initial, onSaved, onCancel, api }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function RiskAppetite() {
-    const { session, api } = useAuth();
+    const { api } = useAuth();
     const t = useT();
-    const activeCompany = session.companies.find((c) => c.id === session.activeCompanyId);
-    const role = activeCompany?.role;
-    const canEdit       = ['Admin', 'CRO', 'Consultant CRO'].includes(role);
-    const canViewHistory = ['Admin', 'CRO', 'Consultant CRO'].includes(role);
+    const canEdit       = usePermission('risk_appetite.manage') !== 'none';
+    const canViewHistory = canEdit;
 
     const [tab, setTab]             = useState('statements');
     const [statements, setStatements] = useState([]);

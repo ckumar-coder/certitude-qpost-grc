@@ -1,10 +1,18 @@
 // ScoringMethodology.jsx — Scoring Methodology page. `canManage` (below)
-// is CRO/Consultant CRO ONLY — Admin is deliberately(?) excluded, unlike
-// almost every other module. Confirmed still true as of 2026-07-21;
-// flagged as a likely-unintentional gap, not documented policy — see
-// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx Finding 5.
+// is CRO/Consultant CRO ONLY — Admin (and Super Admin) are deliberately
+// excluded, unlike almost every other module. Finding 5's "likely
+// unintentional gap" question was resolved by Decision 2 (2026-07-22):
+// kept as CRO-owned risk policy, consistent with Admin's other CRO-tier
+// exclusions (e.g. Horizon Scanning). Phase D batch 4 (2026-07-23): cut
+// over from the role literal to usePermission('scoring_methodology.manage')
+// — the seed already matched this flag exactly (CRO/Consultant CRO only),
+// so this is a zero-behavior-change mechanical swap, done for consistency
+// with the rest of the app and so future Admin-screen changes to this
+// capability take effect without a redeploy. See
+// Documents/Internal/RBAC_Permissions_Engine_Scoping.docx Finding 5 and
+// section 3.6.
 import { useEffect, useState } from 'react';
-import { useAuth } from '../AuthContext';
+import { useAuth, usePermission } from '../AuthContext';
 import { useT } from '../contexts/LanguageContext';
 
 const DEFAULT_LIKELIHOOD = [
@@ -141,11 +149,9 @@ function CardHeader({ title, subtitle, accent }) {
 }
 
 export default function ScoringMethodology() {
-    const { api, session } = useAuth();
+    const { api } = useAuth();
     const t = useT();
-    const activeCompany = session.companies.find((c) => c.id === session.activeCompanyId);
-    const role = activeCompany?.role || 'Viewer';
-    const canManage = role === 'CRO' || role === 'Consultant CRO';
+    const canManage = usePermission('scoring_methodology.manage') !== 'none';
 
     const [likelihoods, setLikelihoods] = useState(DEFAULT_LIKELIHOOD);
     const [impacts,     setImpacts]     = useState(DEFAULT_IMPACT);
