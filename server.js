@@ -10502,12 +10502,22 @@ app.get(
 
 // ============================================================
 // AI Integration — Admin API key management
+// Access: Admin, Super Admin only -- can('ai_settings.manage') as of the
+// Phase C cutover (2026-07-23). GET previously also listed CRO/Consultant
+// CRO/Risk Manager, broader than the seeded ai_settings.manage capability;
+// Chandrashekar confirmed (2026-07-23) this should narrow to Admin/Super
+// Admin only, not gain a separate ai_settings.view capability. Zero
+// user-facing change: Layout.jsx's ai-integration NAV_ITEMS entry and
+// App.jsx's page gate already restricted this page to Admin/Super Admin
+// only, so CRO/Consultant CRO/Risk Manager never actually reached this via
+// the app UI despite the backend's broader role list -- same latent-
+// over-permissioning pattern as the Scoring Methodology finding.
 // ============================================================
 
 // GET /api/admin/ai-settings — returns provider label + masked key (last 4 chars only)
 app.get(
     '/api/admin/ai-settings',
-    requireRole('Admin', 'CRO', 'Consultant CRO', 'Risk Manager'),
+    can('ai_settings.manage'),
     asyncHandler(async (req, res) => {
         const r = await pool.query(
             'SELECT ai_api_key, ai_api_provider FROM companies WHERE id = $1',
@@ -10523,10 +10533,10 @@ app.get(
     })
 );
 
-// PATCH /api/admin/ai-settings — store or clear the AI API key (Admin only)
+// PATCH /api/admin/ai-settings — store or clear the AI API key (Admin/Super Admin only)
 app.patch(
     '/api/admin/ai-settings',
-    requireRole('Admin'),
+    can('ai_settings.manage'),
     asyncHandler(async (req, res) => {
         const { ai_api_key, ai_api_provider } = req.body;
         // Passing ai_api_key: null explicitly clears the key
