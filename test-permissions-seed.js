@@ -30,6 +30,25 @@ const pool = new Pool({ connectionString: DATABASE_URL });
 // to build schema_v75_permissions_engine.sql's seed -- see the Phase A build
 // notes in CLAUDE.md (2026-07-22 entry) for how this was derived from
 // Section 3 of the scoping doc plus Decisions 1-5.
+//
+// Updated 2026-07-23 (Phase E) to also reflect four live-only corrections
+// made via one-off PUT /api/roles/:id/permissions scripts during Phase C/D
+// -- none of these touched schema_v75_permissions_engine.sql itself (that
+// migration has already run and shouldn't be edited retroactively), so
+// this EXPECTED map is the only place that needed catching up:
+//   - risk.create / risk.edit / risk.approve_manager: Admin -> 'none'
+//     (Super Admin unaffected) -- the "Admin risk-permission seed
+//     correction" in the post-Phase-C cleanup pass.
+//   - issue.update_status / issue.action.manage: Consultant CRO ->
+//     'full' (was missing a seed row entirely, defaulting to 'none') --
+//     fix-consultant-cro-issue-perms.js, Phase C batch 3.
+//   - horizon.view / horizon.manage / horizon.delete / horizon.ai_draft:
+//     narrowed to Super Admin / CRO / Consultant CRO only -- Admin, Risk
+//     Manager, Risk Champion, and Risk Owner all -> 'none' --
+//     fix-horizon-permissions.js, Phase D batch 2.
+//   - risk_config.manage: CRO / Consultant CRO / Risk Manager -> 'full'
+//     (Risk Champion stays 'none') -- fix-risk-config-permissions.js,
+//     Phase C batch 12.
 const EXPECTED = {
     "BASELINE": {
         "audit_log.view": {
@@ -406,7 +425,7 @@ const EXPECTED = {
             "label": "Generate AI draft scan",
             "module": "Horizon Scanning",
             "scopes": {
-                "Admin": "full",
+                "Admin": "none",
                 "CRO": "full",
                 "Consultant CRO": "full",
                 "Risk Champion": "none",
@@ -421,7 +440,7 @@ const EXPECTED = {
             "label": "Delete a horizon scan",
             "module": "Horizon Scanning",
             "scopes": {
-                "Admin": "full",
+                "Admin": "none",
                 "CRO": "full",
                 "Consultant CRO": "full",
                 "Risk Champion": "none",
@@ -436,11 +455,11 @@ const EXPECTED = {
             "label": "Create/edit/convert horizon scans",
             "module": "Horizon Scanning",
             "scopes": {
-                "Admin": "full",
+                "Admin": "none",
                 "CRO": "full",
                 "Consultant CRO": "full",
                 "Risk Champion": "none",
-                "Risk Manager": "full",
+                "Risk Manager": "none",
                 "Risk Owner": "none",
                 "Super Admin": "full",
                 "Viewer": "none"
@@ -451,12 +470,12 @@ const EXPECTED = {
             "label": "View horizon scans",
             "module": "Horizon Scanning",
             "scopes": {
-                "Admin": "full",
+                "Admin": "none",
                 "CRO": "full",
                 "Consultant CRO": "full",
-                "Risk Champion": "full",
-                "Risk Manager": "full",
-                "Risk Owner": "full",
+                "Risk Champion": "none",
+                "Risk Manager": "none",
+                "Risk Owner": "none",
                 "Super Admin": "full",
                 "Viewer": "none"
             },
@@ -543,7 +562,7 @@ const EXPECTED = {
             "scopes": {
                 "Admin": "full",
                 "CRO": "full",
-                "Consultant CRO": "none",
+                "Consultant CRO": "full",
                 "Risk Champion": "dept",
                 "Risk Manager": "dept",
                 "Risk Owner": "dept",
@@ -588,7 +607,7 @@ const EXPECTED = {
             "scopes": {
                 "Admin": "full",
                 "CRO": "full",
-                "Consultant CRO": "none",
+                "Consultant CRO": "full",
                 "Risk Champion": "dept",
                 "Risk Manager": "dept",
                 "Risk Owner": "dept",
@@ -871,7 +890,7 @@ const EXPECTED = {
             "label": "Manager-level risk approval",
             "module": "Risk Register",
             "scopes": {
-                "Admin": "full",
+                "Admin": "none",
                 "CRO": "full",
                 "Consultant CRO": "full",
                 "Risk Champion": "none",
@@ -916,7 +935,7 @@ const EXPECTED = {
             "label": "Create a risk",
             "module": "Risk Register",
             "scopes": {
-                "Admin": "full",
+                "Admin": "none",
                 "CRO": "full",
                 "Consultant CRO": "full",
                 "Risk Champion": "full",
@@ -961,7 +980,7 @@ const EXPECTED = {
             "label": "Edit a risk",
             "module": "Risk Register",
             "scopes": {
-                "Admin": "full",
+                "Admin": "none",
                 "CRO": "full",
                 "Consultant CRO": "full",
                 "Risk Champion": "own",
@@ -1082,10 +1101,10 @@ const EXPECTED = {
             "module": "Users & Company Admin",
             "scopes": {
                 "Admin": "full",
-                "CRO": "none",
-                "Consultant CRO": "none",
+                "CRO": "full",
+                "Consultant CRO": "full",
                 "Risk Champion": "none",
-                "Risk Manager": "none",
+                "Risk Manager": "full",
                 "Risk Owner": "none",
                 "Super Admin": "full",
                 "Viewer": "none"
