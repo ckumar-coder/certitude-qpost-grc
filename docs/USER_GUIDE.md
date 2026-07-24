@@ -6,12 +6,15 @@ unfamiliar, check the **Glossary** at the end.
 
 > This is a lightweight, all-roles overview. For detailed, screenshot-based
 > instructions, see the role-specific User Manuals in the parent project's
-> `Documents/` folder — the Risk Champion manual (English + Arabic) exists
-> today; Admin, CRO, and Risk Manager manuals are planned (see the
-> documentation tracker spreadsheet for status).
+> `Documents/` and `Handover Documents/` folders — Risk Champion (English +
+> Arabic), Risk Manager, and CRO manuals are drafted with screenshots
+> (partial); the Admin manual is planned last, since the Admin experience
+> changed materially with the Roles & Permissions screen (see Section 10
+> below). See the documentation tracker spreadsheet for current status.
 >
 > Rewritten 2026-07-21 — the previous version described a 3-role model
-> (Admin/Manager/Viewer) that no longer matches the app.
+> (Admin/Manager/Viewer) that no longer matches the app. Section 10 updated
+> 2026-07-23 to describe the Roles & Permissions screen.
 
 ## 1. Logging in
 
@@ -113,27 +116,41 @@ Incidents move through Open → Under Investigation → Resolved → Closed.
 
 ## 9. Horizon Scanning and Risk Appetite
 
-**Horizon Scanning** is where you log an emerging signal before it
-becomes a fully scored risk — useful for "we should keep an eye on this"
-items that aren't ready for the full Risk Register process yet. A scan
-can be converted directly into a risk once it's understood well enough.
+**Horizon Scanning** (Super Admin/CRO/Consultant CRO only) is where you
+log an emerging signal before it becomes a fully scored risk — useful for
+"we should keep an eye on this" items that aren't ready for the full Risk
+Register process yet. A scan can be converted directly into a risk once
+it's understood well enough. If you don't see this in your sidebar, your
+role doesn't have access to it.
 
-**Risk Appetite** (CRO/Consultant CRO/Admin) holds the organization's
-formal category-level appetite statements — distinct from the per-risk
-appetite threshold used for breach flagging on individual risks.
+**Risk Appetite** (Admin/Super Admin/CRO/Consultant CRO manage; every role
+can view) holds the organization's formal category-level appetite
+statements — distinct from the per-risk appetite threshold used for
+breach flagging on individual risks.
 
-## 10. For Admins: configuring notifications & escalation, users, and branding
+## 10. For Admins: configuring notifications & escalation, users, branding, and permissions
 
+- **Roles & Permissions** — see and edit exactly what each role can
+  access, capability by capability (including whether a role sees only
+  their own records, their department's, or the whole company), and
+  create additional custom roles if you need one that doesn't fit the
+  eight built-in roles. New roles start with no access until you grant
+  it. The system won't let you save a change that would leave the company
+  with nobody able to manage users or permissions, and every change here
+  is recorded in the Audit Log.
 - **Escalation Rules** — define, per trigger type, how long before the
   first notification fires, who it goes to, and when it escalates
   further.
 - **Users & Access** — add/remove people, set role and department scope,
-  deactivate accounts.
+  deactivate accounts. The role dropdown here reflects whatever roles
+  exist in Roles & Permissions, including any custom ones you've created.
 - **Branding** — logo and primary color for the login screen and app.
 - **Import / Export** — bring in an existing register via CSV template;
   export any module to CSV.
 - **Audit Log** — a complete, append-only history of who changed what and
-  when.
+  when. Every role can view this — it's one of two permissions ("view
+  audit log," and separately "report an incident") that can never be
+  turned off for any role.
 
 ---
 

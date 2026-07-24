@@ -458,29 +458,52 @@ Admin bypass, the `functional_role = 'Super Admin'` special-casing),
 pass. Tracked in the parent project's `CLAUDE.md` and the documentation
 tracker spreadsheet.
 
-**Known inconsistencies found during a full RBAC audit (2026-07-21).**
-A code-verified audit of every role-based check in the app (backend routes,
-frontend page/nav/component gates) surfaced several places where different
-parts of the app already disagree with each other -- these predate this
-addendum and are not caused by anything above:
-- Viewer is shown the Audit Log nav link but the backend 403s the request.
-- Risk Owner is shown a working global search box but the backend 403s it.
-- The Risk Appetite view route's role list includes a role literally named
-  `Approver`, which doesn't exist in the assignable role list -- almost
-  certainly a leftover from an earlier design iteration.
-- Admin is excluded from editing Scoring Methodology (CRO/Consultant CRO
-  only) and from logging a new Incident (`IncidentLog.jsx`'s `WRITE_ROLES`)
-  -- both look like narrow, likely unintentional gaps rather than policy.
-- `test-routing-audit.js`, a test script meant to catch exactly this kind
-  of drift, has itself drifted -- it's missing eight nav items that exist
-  in the real sidebar and disagrees with the real routing logic on several
-  pages it does cover.
+**Known inconsistencies found during a full RBAC audit (2026-07-21) —
+all six resolved as of 2026-07-23.** A code-verified audit of every
+role-based check in the app (backend routes, frontend page/nav/component
+gates) surfaced six places where different parts of the app already
+disagreed with each other. All six were resolved by the admin-configurable
+permissions engine built in response to this audit (Phases A–E, see
+`docs/ARCHITECTURE.md` section 2a) — kept here as a record of what was
+found and how each was actually closed out, not as an open list:
 
-The full audit, with exact file/line references and a proposed
-admin-configurable permissions engine to fix the root cause (permissions
-hardcoded in ~20 files instead of living in one database table), is at
+- **Viewer shown the Audit Log nav link but 403'd by the backend** —
+  resolved by making `audit_log.view` a non-configurable safety-baseline
+  capability, full for every role including Viewer, on both sides.
+- **Risk Owner shown a working global search box but 403'd by the
+  backend** — resolved: `search.global` is now scope-aware and grants
+  Risk Owner `own`-scope access, matching the frontend. (Viewer remains
+  excluded from search — that part of the original design was
+  intentional, not a bug.)
+- **A role literally named `Approver`** in the Risk Appetite view route's
+  role list, which didn't exist in the assignable role list — deleted
+  outright from the codebase; it had no live purpose.
+- **Admin excluded from editing Scoring Methodology** (CRO/Consultant CRO
+  only) — investigated and confirmed as intentional policy, not a gap:
+  kept as a CRO-owned risk decision, consistent with Admin's other
+  CRO-tier exclusions (e.g. `risk.create`/`risk.edit`/`risk.approve_manager`).
+  Not changed.
+- **Admin excluded from logging a new Incident** — resolved more broadly
+  than the narrow gap originally flagged: incident creation was opened to
+  *every* role, including Admin, Super Admin, and Viewer, as a
+  non-configurable safety baseline (wide reporting intake, narrow triage —
+  delete/link/dismiss stay restricted to the operational/CRO tier).
+- **`test-routing-audit.js` had drifted from the real sidebar/routing
+  logic** — the script was fully rebuilt 2026-07-23 against the current
+  `Layout.jsx`/`App.jsx`, and redesigned around the new architecture: nav
+  visibility and page reachability now read the identical capability key
+  against the identical permissions map, so the only remaining failure
+  mode is the two files disagreeing on which key to use for a given page
+  — which is exactly what the rebuilt script checks.
+
+The full original audit, with exact file/line references, is at
 `Documents/Internal/RBAC_Permissions_Engine_Scoping.docx` (Certitude
-internal -- scoping only, nothing built or deployed as of this writing).
+internal). The permissions engine it scoped is now fully built and
+deployed — schema and seed data (Phase A), an admin UI for managing roles
+and permissions (Phase B), backend enforcement across roughly 132 route
+guards (Phase C), frontend enforcement across routing and 17
+component-level files (Phase D), and cleanup (Phase E) — replacing the
+~20-file hardcoded permission model the audit was scoped against.
 
 **Documentation itself was stale until this pass.** `README.md` and all of
 `docs/` carried the same 2026-06-28 timestamp as the fork, describing the

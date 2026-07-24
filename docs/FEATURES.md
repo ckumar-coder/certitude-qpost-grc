@@ -47,6 +47,21 @@ and do today:
 - **Viewer** — read-only access to published policies, dashboards, and
   most registers.
 
+**Admin-configurable permissions (Roles & Permissions screen).** What each
+role can see and do is no longer hardcoded — it lives in a database-backed
+capability model that Qatar Post's own Admin manages directly from a
+dedicated screen, with no Certitude code change or redeploy needed. Admin
+can create additional custom roles (starting with zero access, so nothing
+is ever accidentally over-granted) and edit any role's access, capability
+by capability, across every module — including, where relevant, whether
+that role sees only their own records, their department's, or the whole
+company. A built-in guardrail refuses to save a change that would leave
+the company with nobody able to manage users or permissions, and every
+change is written to the audit trail. Two safety-baseline permissions
+(viewing the audit log, and reporting an incident) are always available to
+every role and can't be configured away. See `docs/ARCHITECTURE.md`
+section 2a for the technical detail.
+
 **Secure session management.** Email/password login with enforced
 password complexity, reuse prevention, mandatory periodic rotation, and
 account lockout after repeated failed attempts. Sessions time out
@@ -286,9 +301,12 @@ Post's instance is configured with Qatar Post's navy branding
   for the technical picture.
 - **`USER_GUIDE.md`** — a lightweight, all-roles overview.
 - **Role-specific User Manuals** (in the parent project's `Documents/`
-  folder) — currently Risk Champion (English + Arabic), with Admin, CRO,
-  and Risk Manager manuals planned. See the documentation tracker
-  spreadsheet for status.
+  and `Handover Documents/` folders) — Risk Champion (English + Arabic),
+  Risk Manager, and CRO are drafted with screenshots (partial — some
+  figures are still pending seeded data to capture). The Admin manual is
+  deliberately last, since the Admin experience changed materially with
+  the Roles & Permissions screen above. See the documentation tracker
+  spreadsheet for current status.
 - **`deploy/README.md`** — deployment guide, including Qatar Post's own
   deploy scripts.
 - **In-app Help** — context-sensitive Help panel content, bilingual,

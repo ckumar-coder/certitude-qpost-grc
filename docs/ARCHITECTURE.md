@@ -10,6 +10,11 @@ the codebase. Pair this with `API_REFERENCE.md` (endpoint catalog) and
 > version of this document was frozen at the 2026-06-28 fork point and
 > described a ~3,600-line `server.js` with a 3-role model — see
 > `docs/SCOPE_NOTES.md` for the full history of what's changed since.
+>
+> **Section 2 updated 2026-07-23** to describe the admin-configurable
+> permissions engine, which was scoped-only when this document was first
+> rewritten and has since been fully built and deployed (Phases A–E). See
+> the note in Section 2 for details.
 
 ## 1. Tech stack
 
@@ -37,20 +42,21 @@ the codebase. Pair this with `API_REFERENCE.md` (endpoint catalog) and
 
 ## 2. Role model
 
-Today the app has **eight roles**, defined in `UserManagement.jsx`'s
-`ROLES` constant: `Super Admin`, `Admin`, `Risk Champion`, `Risk Owner`,
-`Risk Manager`, `CRO`, `Viewer`, `Consultant CRO`.
+Today the app has **eight roles**, seeded as built-in rows in the `roles`
+table (see "Admin-configurable permissions engine" below):
+`Super Admin`, `Admin`, `Risk Champion`, `Risk Owner`, `Risk Manager`,
+`CRO`, `Viewer`, `Consultant CRO`.
 
 | Role | Summary |
 |---|---|
-| Super Admin | Backend-represented as `role: 'Admin'` + `functional_role: 'Super Admin'`. Bypasses every `requireRole()` check unconditionally (see below) and auto-approves its own risk submissions, same as CRO. |
-| Admin | Full access to company configuration, users, and (with a couple of narrow, likely-unintentional exceptions — see `docs/SCOPE_NOTES.md`) every module. Also bypasses every `requireRole()` check unconditionally, same as Super Admin. |
+| Super Admin | Backend-represented as `role: 'Admin'` + `functional_role: 'Super Admin'`. Bypasses every `requireRole()` check unconditionally (see below) and auto-approves its own risk submissions, same as CRO. Seeded at `full` on nearly every capability in the permissions engine (two deliberate exceptions — see below). |
+| Admin | Full access to company configuration, users, and (with a couple of narrow, deliberate exceptions — e.g. `risk.create`/`risk.edit`/`risk.approve_manager`, `scoring_methodology.manage`, `horizon.*` — see `docs/SCOPE_NOTES.md`) every module. Also bypasses every `requireRole()` check unconditionally, same as Super Admin. |
 | Risk Manager | Department-scoped operational role — manages risks/controls/KRIs/issues/incidents for their department(s). |
-| Risk Champion | Submits risks; can only edit their own submissions (not department-wide) until a Risk Manager or above takes ownership. |
+| Risk Champion | Submits risks; can only edit their own submissions while still in Draft (not department-wide, and not after submission) until a Risk Manager or above takes ownership. |
 | Risk Owner | First-line approver step on the risk workflow; department-scoped. |
 | CRO | Enterprise-wide approval authority; final risk acceptance/decline. |
-| Consultant CRO | Everywhere the backend checks for `CRO`, an auto-expand rule in `requireRole()` also admits `Consultant CRO` — it inherits CRO's access. Retained permanently (not a removal candidate) so the Qatar Post CRO can draw on a Certitude consultant's assistance post-handover if needed; the Qatar Post Admin controls whether/when a real person is assigned this role. |
-| Viewer | Read-only across most modules; excluded from a few (global search, notifications — see `docs/SCOPE_NOTES.md` for known inconsistencies). |
+| Consultant CRO | Everywhere the backend checks for `CRO`, an auto-expand rule in `requireRole()` also admits `Consultant CRO` — it inherits CRO's access (mirrored in the permissions engine's seed, capability by capability). Retained permanently (not a removal candidate) so the Qatar Post CRO can draw on a Certitude consultant's assistance post-handover if needed; the Qatar Post Admin controls whether/when a real person is assigned this role. |
+| Viewer | Read-only across most modules; a couple of historical nav/backend mismatches (global search, the Audit Log link) were resolved by the permissions engine rollout — see below. |
 
 **Planned change, not yet implemented — Super Admin only:** Super Admin is
 retained for now for training purposes, and will be deleted either just
@@ -59,25 +65,91 @@ after — timing is Qatar Post's call, confirmed when Phase 3 (on-prem
 transfer) actually happens. When that happens, `requireRole()`'s
 Admin/Super-Admin bypass logic and every role list throughout `server.js`,
 `App.jsx`, and `Layout.jsx` that names Super Admin specifically will need to
-be revisited. Consultant CRO is unaffected — it is not planned for removal,
-so the CRO/Consultant-CRO auto-expand rule stays as-is indefinitely. Not
-done as of this writing — tracked in the parent project's `CLAUDE.md`.
+be revisited — this is now a much smaller, cleaner change than it would
+have been before the permissions engine existed, since most of Super
+Admin's access lives in one `roles` table row rather than scattered
+role-literal checks (removing the role becomes closer to a row deletion
+than a multi-file code change). Consultant CRO is unaffected — it is not
+planned for removal, so the CRO/Consultant-CRO auto-expand rule stays as-is
+indefinitely. Not done as of this writing — tracked in the parent
+project's `CLAUDE.md`.
 
 **Department scoping**: `Risk Champion`, `Risk Owner`, and `Risk Manager`
 are the `DEPT_SCOPED_ROLES`. Scoped users see/edit only records in their
 department(s) (with business-unit expansion), enforced via
 `getManagerDepts()` / `managerScopeClause()` / `managerCanAccess()` in
-`server.js`. Admin, Super Admin, CRO, and Consultant CRO see everything.
-Risk Champion additionally has an even narrower "own submission" rule on
-risk edits, checked directly against `assessed_by` rather than department.
+`server.js` — this internal filtering logic is independent of the
+permissions engine's own `own`/`dept`/`full` scope values (see below) and
+was deliberately left untouched throughout its rollout. Admin, Super
+Admin, CRO, and Consultant CRO see everything. Risk Champion additionally
+has an even narrower "own submission" rule on risk edits, checked directly
+against `assessed_by` rather than department, and only while the risk is
+still in Draft status — editing a submitted risk is Risk Manager/CRO/
+Admin/Super Admin territory from that point on.
 
-A full, code-verified audit of every place a role decision is made today
-— all ~120 backend routes, all frontend page/nav/component gates, and the
-inconsistencies the audit surfaced — is in
-`Documents/Internal/RBAC_Permissions_Engine_Scoping.docx` (Certitude
-internal; scopes a proposed admin-configurable permissions engine so
-Qatar Post can manage roles without code changes post-handover — not yet
-built).
+### 2a. Admin-configurable permissions engine (RBAC)
+
+**Built and fully live as of 2026-07-23.** Every route guard and frontend
+page/nav/component gate in the app is now driven by a database-backed
+capability model instead of hardcoded role-string comparisons, so Qatar
+Post's own Admin can create custom roles and change what any role can
+access — without Certitude editing code or redeploying.
+
+**Schema** (`schema_v75_permissions_engine.sql`): three tables —
+`roles` (8 built-in rows, plus company-created custom roles), `capabilities`
+(81 rows: 79 configurable + 2 non-configurable safety baselines — see
+below), and `role_permissions` (the (role × capability) → scope grid, one
+row per non-`none` grant). `supports_scope` on a capability marks whether
+it can be `own`/`dept` scoped or is `none`/`full`-only.
+
+**Backend primitive** (`server.js`): `can(capabilityKey)` is a
+`requireRole()`-style Express middleware — 403s if the resolved scope is
+`none`, otherwise sets `req.scope` (`'own'|'dept'|'full'`) and calls
+`next()`. `resolveScope()` underneath it queries `role_permissions` (cached
+in-process per `companyId::role::capability`, cleared immediately whenever
+an Admin saves a change via the admin screen below). Roughly 132 route
+guards across every module — KRIs, Risk Register, Controls, Issues,
+Obligations, Policies, Org Roles/RACI, Evidence, Incident Log, Horizon
+Scanning, Risk Gov. Documents, Scoring Methodology/Risk Appetite, and
+Users & Company Admin (Users, Departments, Business Units, Company
+Structure, Branding, Email Settings, Risk Configuration) — were migrated
+from `requireRole()` to `can()` across ten build batches. A handful of
+routes deliberately remain on `requireRole()` where no capability
+represents them (e.g. the heatmap-dimensions company setting) or where the
+logic is manager-approval-chain business rules rather than a flat
+capability (e.g. exactly which risk-workflow transition a role may
+perform) — each is commented in place explaining why.
+
+**Frontend**: on login, `getPermissionsMap()` attaches a full capability →
+scope map to each company in the session payload
+(`session.companies[].permissions`). `Layout.jsx`'s `NAV_ITEMS` and
+`App.jsx`'s page-gate chain both resolve visibility from that same map
+(`(permissions[key] || 'none') !== 'none'`) instead of role-literal arrays,
+and `usePermission(key)` (`AuthContext.jsx`) is the equivalent hook for the
+~20 component-level `canX` flags (e.g. "show the Record Test button")
+across 17 page/component files. Because nav visibility and page
+reachability now read the *identical* key against the *identical* map,
+they cannot disagree unless the two files reference different capability
+keys for the same page — see `test-routing-audit.js` (root of the repo),
+which checks exactly that.
+
+**Two non-configurable safety-baseline capabilities** — `audit_log.view`
+and `incident.create` — are hardcoded always-`full` in `can()`'s scope
+resolution rather than living in `role_permissions`, so they can never be
+misconfigured away from any role, including future custom roles that
+otherwise start at zero permissions.
+
+**Admin UI**: a Roles & Permissions screen (`RolesPermissions.jsx`,
+`/api/roles*` + `/api/capabilities`) lets Admin view/create roles and edit
+the full capability grid, with a lockout guardrail (a save that would leave
+the company with zero users able to reach `users.manage` or `roles.manage`
+is rejected) and every change written to the Audit Log. See
+`docs/API_REFERENCE.md`'s "Roles & Permissions" section for the routes.
+
+Full design rationale, the capability taxonomy, and the phase-by-phase
+build/decision record are in
+`Documents/Internal/RBAC_Permissions_Engine_Scoping.docx` and the parent
+project's `CLAUDE.md` respectively (Certitude-internal, not client-facing).
 
 ## 3. Multi-tenancy model
 
@@ -146,15 +218,20 @@ see `docs/SCOPE_NOTES.md`).
 
 `frontend/src/`:
 - `App.jsx` — top-level routing (a `page` string + `onNavigate`, no router
-  library). About two dozen page-visibility gates, one per page, each a
-  role comparison.
+  library). About three dozen page-visibility gates, one per page — almost
+  all now a capability check (`can('some.capability')`) against the live
+  permissions map rather than a role comparison; see Section 2a.
 - `AuthContext.jsx` / `api.js` — session state, the `api` client, idle
-  timeout warning.
+  timeout warning, and `usePermission(key)` (the component-level
+  equivalent of `App.jsx`'s `can()`, used by ~20 `canX` flags across the
+  page/component files).
 - `pages/` — one file per screen (30+ files, e.g. `RiskRegister.jsx`,
   `IncidentLog.jsx`, `HorizonScanning.jsx`, `RiskAppetite.jsx`,
-  `RiskGovDocs.jsx`).
+  `RiskGovDocs.jsx`, `RolesPermissions.jsx` — the permissions-engine admin
+  screen).
 - `components/` — shared pieces: `Layout.jsx` (sidebar + shell, holds the
-  `NAV_ITEMS` role-visibility array), `TopBar.jsx` (global search +
+  `NAV_ITEMS` array — capability-driven for all but 3 documented
+  exceptions with no matching capability), `TopBar.jsx` (global search +
   notifications), `DepartmentField.jsx`, `EvidenceAttachments.jsx`,
   `scoreBadge.js`.
 - `translations.js` / `help-content.js` — the `{en, ar}` bilingual content
